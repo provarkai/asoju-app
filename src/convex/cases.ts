@@ -360,18 +360,12 @@ export function buildQuoteLines(
     label: string;
     amount: number;
   }[] = [];
+  // Pricing model: transport & logistics are covered out of the ASOJU service
+  // fee — there is deliberately no separate transport line item.
   lines.push({
     category: "ASOJU_SERVICE_FEE",
-    label: `${SERVICE_META[serviceType].label} — service fee`,
+    label: `${SERVICE_META[serviceType].label} — service fee (includes representative transport & logistics)`,
     amount: baseFee,
-  });
-  const transport = city && city.toLowerCase().includes("lagos") ? 15000 : 25000;
-  // Pricing model: representative transport & logistics is part of the ASOJU
-  // service fee — not a separate external pass-through line.
-  lines.push({
-    category: "ASOJU_SERVICE_FEE",
-    label: "Representative transport & logistics",
-    amount: transport,
   });
   if (serviceType === "CONSTRUCTION_SUPERVISION") {
     lines.push({
