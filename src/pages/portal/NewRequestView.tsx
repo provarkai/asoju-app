@@ -11,12 +11,14 @@ import {
   ClipboardCheck,
   FilePlus2,
   HardHat,
+  HeartHandshake,
   Home,
   Loader2,
   MapPin,
   MessageCircle,
   PackageSearch,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
@@ -39,6 +41,8 @@ const SERVICES: {
   { type: "FAMILY_SUPPORT", icon: Building2, name: "Family Support Errands", desc: "Help for the family back home.", from: 45000, popular: false },
   { type: "PROCUREMENT", icon: PackageSearch, name: "Procurement & Delivery", desc: "Buy it there, deliver it, prove it.", from: 30000, popular: false },
   { type: "BUSINESS_VERIFICATION", icon: Building2, name: "Business Verification", desc: "Check that business actually exists.", from: 90000, popular: false },
+  { type: "INVESTMENT_SUPPORT", icon: TrendingUp, name: "Investment Support", desc: "Eyes on the ground for your investment.", from: 100000, popular: false },
+  { type: "BEREAVEMENT_SUPPORT", icon: HeartHandshake, name: "Bereavement & Funeral Logistics", desc: "We handle the hardest day with care.", from: 150000, popular: false },
 ];
 
 const TIMELINES: { key: Timeline; label: string; hint: string }[] = [

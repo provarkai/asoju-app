@@ -232,9 +232,10 @@ function NotifPanel({
   notifications,
   onClose,
 }: {
-  notifications: { _id: string; title: string; body: string; readAt?: number; createdAt: number }[];
+  notifications: { _id: string; title: string; body: string; readAt?: number; createdAt: number; caseId?: string }[];
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
   return (
     <div
       className="flex h-full w-80 flex-col border-l border-forest/10 bg-white shadow-2xl"
@@ -253,10 +254,15 @@ function NotifPanel({
           </p>
         )}
         {notifications.map((n) => (
-          <div
+          <button
             key={n._id}
+            onClick={() => {
+              onClose();
+              if (n.caseId) navigate(`/dashboard/cases/${n.caseId}`);
+            }}
             className={cn(
-              "rounded-xl border p-3.5 transition-colors hover:border-forest/25",
+              "block w-full rounded-xl border p-3.5 text-left transition-colors",
+              n.caseId ? "cursor-pointer hover:border-forest/25 hover:bg-ivory/60" : "cursor-default",
               n.readAt ? "border-forest/8 bg-white" : "border-gold/40 bg-gold/5",
             )}
           >
@@ -264,8 +270,9 @@ function NotifPanel({
             <p className="mt-0.5 text-xs leading-relaxed text-forest/60">{n.body}</p>
             <p className="mt-1.5 text-[10px] text-forest/40">
               {new Date(n.createdAt).toLocaleString()}
+              {n.caseId && " · Tap to open case"}
             </p>
-          </div>
+          </button>
         ))}
       </div>
     </div>

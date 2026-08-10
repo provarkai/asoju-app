@@ -16,6 +16,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useNavigate } from "react-router";
 import { naira, timeAgo } from "@/lib/asoju";
+import { cn } from "@/lib/utils";
 
 export function HomeView() {
   const navigate = useNavigate();
@@ -186,9 +187,13 @@ export function HomeView() {
           </h2>
           <div className="mt-3 space-y-2.5">
             {dashboard.notifications.slice(0, 4).map((n) => (
-              <div
+              <button
                 key={n._id}
-                className="flex items-start gap-3 rounded-xl border border-forest/8 bg-ivory/50 p-3"
+                onClick={() => n.caseId && navigate(`/dashboard/cases/${n.caseId}`)}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-xl border border-forest/8 bg-ivory/50 p-3 text-left",
+                  n.caseId && "transition-colors hover:border-forest/25 hover:bg-ivory",
+                )}
               >
                 <Badge className="mt-0.5 border-gold/40 bg-gold/10 text-clay">
                   <Sparkles className="size-3" />
@@ -200,7 +205,7 @@ export function HomeView() {
                 <span className="shrink-0 text-[10px] text-forest/40">
                   {timeAgo(n.createdAt)}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </section>

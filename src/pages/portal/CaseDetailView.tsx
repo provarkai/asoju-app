@@ -22,6 +22,7 @@ import {
   FileCheck2,
   Loader2,
   MapPin,
+  Pause,
   Play,
   Receipt,
   RotateCcw,
@@ -47,6 +48,8 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
   const demoAdvance = useMutation(api.cases.demoAdvance);
   const approveReport = useMutation(api.cases.approveReport);
   const requestAdditionalWork = useMutation(api.cases.requestAdditionalWork);
+  const holdCase = useMutation(api.cases.holdCase);
+  const resumeCase = useMutation(api.cases.resumeCase);
   const sendMessage = useMutation(api.cases.sendMessage);
 
   if (!kase) {
@@ -91,6 +94,19 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
     "QUALITY_CONTROL",
     "APPROVED",
     "COMPLETED",
+  ].includes(status);
+
+  const canHold = [
+    "SUBMITTED",
+    "UNDER_REVIEW",
+    "QUOTED",
+    "AWAITING_PAYMENT",
+    "SCHEDULED",
+    "ASSIGNED",
+    "IN_PROGRESS",
+    "EVIDENCE_SUBMITTED",
+    "QUALITY_CONTROL",
+    "ADDITIONAL_WORK",
   ].includes(status);
 
   const teamActionLabel: Record<string, string> = {
@@ -282,9 +298,54 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
         )}
 
         {status === "ON_HOLD" && (
-          <p className="text-sm text-forest/70">
-            This case is on hold — we'll resume when you're ready.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-forest">Case is on hold</p>
+              <p className="text-xs text-forest/60">
+                Paused at your request. We'll pick up exactly where we left off
+                when you resume.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="border-forest/25 text-forest hover:bg-forest hover:text-ivory"
+              disabled={busy !== null}
+              onClick={() =>
+                run("resume", () => resumeCase({ caseId: caseIdTyped }), "Hold lifted — case resumed")
+              }
+            >
+              {busy === "resume" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Play className="size-4" />
+              )}
+              Resume case
+            </Button>
+          </div>
+        )}
+
+        {canHold && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gold/25 pt-3.5">
+            <div>
+              <p className="text-xs text-forest/60">
+                Need to pause this case? You can put it on hold and resume
+                anytime — nothing is lost.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              className="text-forest/70 hover:bg-gold/10 hover:text-forest"
+              disabled={busy !== null}
+              onClick={() => {
+                const reason = window.prompt("Why are you putting this case on hold?");
+                if (reason === null) return;
+                run("hold", () => holdCase({ caseId: caseIdTyped, reason: reason.trim() || "Customer requested hold" }), "Case put on hold");
+              }}
+            >
+              {busy === "hold" ? <Loader2 className="size-4 animate-spin" /> : <Pause className="size-4" />}
+              Put on hold
+            </Button>
+          </div>
         )}
       </section>
 
