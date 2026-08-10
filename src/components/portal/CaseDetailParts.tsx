@@ -116,8 +116,8 @@ export function QuoteCard({
   accepted,
 }: {
   quote: QuoteData;
-  onAccept: () => void;
-  busy: boolean;
+  onAccept?: () => void; // omit for a read-only (team) view
+  busy?: boolean;
   accepted: boolean;
 }) {
   const [now] = useState(() => Date.now());
@@ -176,7 +176,7 @@ export function QuoteCard({
           <div className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-medium text-red-600">
             <CalendarClock className="size-4" /> Quote expired
           </div>
-        ) : (
+        ) : onAccept ? (
           <Button
             className="w-full bg-forest text-ivory hover:bg-forest-deep"
             onClick={onAccept}
@@ -185,6 +185,10 @@ export function QuoteCard({
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
             Accept quote &amp; create invoice
           </Button>
+        ) : (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-forest/10 bg-ivory/60 py-2.5 text-sm font-medium text-forest/60">
+            <Lock className="size-3.5" /> Awaiting customer decision
+          </div>
         )}
         <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11px] text-forest/45">
           <Lock className="size-3" />
@@ -380,10 +384,13 @@ export function MessageThread({
   messages,
   onSend,
   busy,
+  asTeam = false,
 }: {
   messages: MessageItem[];
   onSend: (body: string) => void;
   busy: boolean;
+  /** Team perspective: right-align ASOJU team messages instead of customer ones. */
+  asTeam?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   return (
@@ -399,7 +406,7 @@ export function MessageThread({
           </p>
         )}
         {messages.map((m) => {
-          const mine = m.senderRole === "customer";
+          const mine = asTeam ? m.senderRole === "asoju-team" : m.senderRole === "customer";
           return (
             <div key={m._id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
               <div
@@ -434,7 +441,7 @@ export function MessageThread({
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Message the ASOJU team…"
+          placeholder={asTeam ? "Reply to the customer…" : "Message the ASOJU team…"}
           className="h-10 flex-1 rounded-xl border border-forest/15 bg-ivory/50 px-3.5 text-sm outline-none transition-colors focus:border-forest/40 focus:bg-white"
         />
         <Button

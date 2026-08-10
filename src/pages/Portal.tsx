@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   UserRound,
+  UsersRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -18,18 +19,24 @@ import { HomeView } from "./portal/HomeView";
 import { NewRequestView } from "./portal/NewRequestView";
 import { CaseDetailView } from "./portal/CaseDetailView";
 import { ProfileView } from "./portal/ProfileView";
+import { TeamView } from "./portal/TeamView";
+import { TeamCaseView } from "./portal/TeamCaseView";
 
 const NAV = [
   { key: "home", label: "My cases", path: "/dashboard", icon: LayoutDashboard },
   { key: "new", label: "New request", path: "/dashboard/new", icon: FilePlus2 },
   { key: "profile", label: "Profile", path: "/dashboard/profile", icon: UserRound },
+  { key: "team", label: "Team", path: "/dashboard/team", icon: UsersRound, adminOnly: true },
 ];
 
 export default function Portal() {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const caseId = params.caseId;
+  const teamCaseId = params.teamCaseId;
+  const isAdmin = user?.role === "admin";
+  const navItems = NAV.filter((item) => !item.adminOnly || isAdmin);
 
   const dashboard = useQuery(api.cases.getDashboard);
   const ensureOnboarded = useMutation(api.profile.ensureOnboarded);
@@ -47,13 +54,18 @@ export default function Portal() {
     }
   }, [ensureOnboarded]);
 
-  const activeKey = caseId
-    ? "case"
-    : window.location.pathname === "/dashboard/new"
-      ? "new"
-      : window.location.pathname === "/dashboard/profile"
-        ? "profile"
-        : "home";
+  const pathname = window.location.pathname;
+  const activeKey = teamCaseId
+    ? "team"
+    : caseId
+      ? "case"
+      : pathname === "/dashboard/new"
+        ? "new"
+        : pathname === "/dashboard/profile"
+          ? "profile"
+          : pathname.startsWith("/dashboard/team")
+            ? "team"
+            : "home";
 
   const handleSignOut = async () => {
     await signOut();
@@ -83,7 +95,7 @@ export default function Portal() {
         </div>
 
         <nav className="flex-1 space-y-1 p-4">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.key}
               onClick={() => {
@@ -160,7 +172,7 @@ export default function Portal() {
       {menuOpen && (
         <div className="fixed inset-x-0 top-14 z-30 border-b border-forest/10 bg-ivory p-3 shadow-lg lg:hidden">
           <div className="grid gap-1">
-            {NAV.map((item) => (
+            {navItems.map((item) => (
               <button
                 key={item.key}
                 onClick={() => {
@@ -212,9 +224,13 @@ export default function Portal() {
 
       {/* ------------------------------- Main */}
       <main className="flex-1 px-4 pb-16 pt-[4.5rem] sm:px-6 lg:px-10 lg:pt-8">
-        <div className="mx-auto max-w-5xl">
-          {caseId ? (
+        <div className="mx-auto max-w-6xl">
+          {teamCaseId ? (
+            <TeamCaseView caseId={teamCaseId} />
+          ) : caseId ? (
             <CaseDetailView caseId={caseId} />
+          ) : activeKey === "team" ? (
+            <TeamView />
           ) : activeKey === "new" ? (
             <NewRequestView />
           ) : activeKey === "profile" ? (

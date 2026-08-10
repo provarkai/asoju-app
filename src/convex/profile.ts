@@ -50,6 +50,28 @@ export const ensureOnboarded = mutation({
       });
     }
 
+    // Demo bootstrap: the first person into the dashboard becomes the admin so
+    // the Team view (all customer cases) has an operator. Subsequent users stay
+    // customers unless an admin promotes them.
+    const existingAdmin = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("role"), "admin"))
+      .first();
+    if (!existingAdmin) {
+      await ctx.db.patch(userId, { role: "admin" });
+    }
+
+    // Demo team data (synthetic customers for the admin board) is idempotent —
+    // seeded on every visit until it exists, so users who onboarded before this
+    // feature also get it.
+    const ezeProfile = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", "demo-cust-eze"))
+      .first();
+    if (!ezeProfile) {
+      await seedFakeCustomers(ctx, now);
+    }
+
     // Seed demo portfolio only once — detect via any existing case
     const existingCases = await ctx.db
       .query("cases")
@@ -257,6 +279,242 @@ async function seedDemoPortfolio(ctx: any, userId: string, now: number) {
     hasPortalAccess: false,
     createdAt: now - 30 * 24 * 3600_000,
   });
+
+}
+
+// ---------------------------------------------------------------------------
+// Demo team-view data — synthetic customers (never visible to a real user's
+// own dashboard; only surfaced in the admin Team board).
+// ---------------------------------------------------------------------------
+
+async function seedFakeCustomers(ctx: any, now: number) {
+  // 1) Chiamaka Eze — London. One case awaiting payment, one completed & paid.
+  const ezeId = "demo-cust-eze";
+  await ctx.db.insert("profiles", {
+    userId: ezeId,
+    fullName: "Chiamaka Eze",
+    countryOfResidence: "United Kingdom",
+    preferredChannel: "whatsapp",
+    onboarded: true,
+    onboardedAt: now,
+    updatedAt: now,
+  });
+  const eze1 = await insertSeededCase(ctx, ezeId, now, {
+    serviceType: "PROPERTY_INSPECTION",
+    description:
+      "I'm buying a 4-bedroom terrace in Lekki and need a physical check of the property and the neighbourhood before I pay any deposit.",
+    location: "Lekki, Lagos",
+    city: "Lekki",
+    state: "Lagos",
+    priority: "PRIORITY",
+    riskLevel: 3,
+    tier: "ESSENTIAL",
+    status: "AWAITING_PAYMENT",
+    nextAction: "Customer to complete payment",
+    nextActionDueAt: now + 2 * 24 * 3600_000,
+    ageDays: 1,
+  });
+  const ezeQuote = buildQuoteLines("PROPERTY_INSPECTION", "ESSENTIAL", "Lekki");
+  const ezeQuoteId = await ctx.db.insert("quotes", {
+    caseId: eze1,
+    userId: ezeId,
+    currency: "NGN",
+    amount: ezeQuote.amount,
+    baseAmount: ezeQuote.baseAmount,
+    nonServiceFeeAmount: ezeQuote.nonServiceFeeAmount,
+    discountAmount: ezeQuote.discountAmount,
+    lines: ezeQuote.lines,
+    expiresAt: now + 7 * 24 * 3600_000,
+    createdAt: now - 20 * 3600_000,
+  });
+  const ezeInvoiceId = await ctx.db.insert("invoices", {
+    caseId: eze1,
+    userId: ezeId,
+    quoteId: ezeQuoteId,
+    amount: ezeQuote.amount,
+    currency: "NGN",
+    createdAt: now - 12 * 3600_000,
+  });
+  await ctx.db.patch(eze1, { quoteId: ezeQuoteId, invoiceId: ezeInvoiceId, updatedAt: now });
+  await seedHistory(ctx, eze1, [
+    { from: "SUBMITTED", to: "UNDER_REVIEW", at: now - 24 * 3600_000, actor: "ASOJU Concierge" },
+    { from: "UNDER_REVIEW", to: "QUOTED", at: now - 20 * 3600_000, actor: "ASOJU Team" },
+    { from: "QUOTED", to: "AWAITING_PAYMENT", at: now - 12 * 3600_000, actor: "Chiamaka Eze" },
+  ]);
+
+  const eze2 = await insertSeededCase(ctx, ezeId, now, {
+    serviceType: "PROCUREMENT",
+    description:
+      "Purchase 10 bags of cement and have them delivered to my mother's building site in Enugu.",
+    location: "Enugu",
+    city: "Enugu",
+    state: "Enugu",
+    priority: "STANDARD",
+    riskLevel: 1,
+    tier: "ESSENTIAL",
+    status: "COMPLETED",
+    paymentStatus: "PAID",
+    assignedAgentName: "Musa Abdullahi",
+    nextAction: "None — case complete",
+    ageDays: 18,
+  });
+  const ezeQuote2 = buildQuoteLines("PROCUREMENT", "ESSENTIAL", "Enugu");
+  const ezeQuote2Id = await ctx.db.insert("quotes", {
+    caseId: eze2,
+    userId: ezeId,
+    currency: "NGN",
+    amount: ezeQuote2.amount,
+    baseAmount: ezeQuote2.baseAmount,
+    nonServiceFeeAmount: ezeQuote2.nonServiceFeeAmount,
+    discountAmount: ezeQuote2.discountAmount,
+    lines: ezeQuote2.lines,
+    expiresAt: now + 7 * 24 * 3600_000,
+    createdAt: now - 17 * 24 * 3600_000,
+  });
+  const ezeInvoice2Id = await ctx.db.insert("invoices", {
+    caseId: eze2,
+    userId: ezeId,
+    quoteId: ezeQuote2Id,
+    amount: ezeQuote2.amount,
+    currency: "NGN",
+    createdAt: now - 17 * 24 * 3600_000,
+  });
+  await ctx.db.insert("payments", {
+    caseId: eze2,
+    userId: ezeId,
+    invoiceId: ezeInvoice2Id,
+    amount: ezeQuote2.amount,
+    currency: "NGN",
+    provider: "paystack",
+    providerReference: "PSK-DEMO-99112",
+    status: "PAID",
+    paidAt: now - 17 * 24 * 3600_000,
+    createdAt: now - 17 * 24 * 3600_000,
+  });
+  const ezeReport = reportForService("PROCUREMENT", eze2);
+  const ezeReportId = await ctx.db.insert("reports", {
+    caseId: eze2,
+    userId: ezeId,
+    summary: ezeReport.summary,
+    findings: ezeReport.findings,
+    confidence: ezeReport.confidence,
+    qcOutcome: "APPROVED",
+    deliveredAt: now - 12 * 24 * 3600_000,
+    createdAt: now - 12 * 24 * 3600_000,
+  });
+  await ctx.db.patch(eze2, {
+    quoteId: ezeQuote2Id,
+    invoiceId: ezeInvoice2Id,
+    reportId: ezeReportId,
+    updatedAt: now,
+  });
+  await seedHistory(ctx, eze2, [
+    { from: "SUBMITTED", to: "UNDER_REVIEW", at: now - 18 * 24 * 3600_000, actor: "ASOJU Concierge" },
+    { from: "UNDER_REVIEW", to: "QUOTED", at: now - 17 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "QUOTED", to: "AWAITING_PAYMENT", at: now - 17 * 24 * 3600_000, actor: "Chiamaka Eze" },
+    { from: "AWAITING_PAYMENT", to: "SCHEDULED", at: now - 17 * 24 * 3600_000, actor: "Paystack" },
+    { from: "SCHEDULED", to: "ASSIGNED", at: now - 16 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "ASSIGNED", to: "IN_PROGRESS", at: now - 13 * 24 * 3600_000, actor: "Musa Abdullahi" },
+    { from: "IN_PROGRESS", to: "EVIDENCE_SUBMITTED", at: now - 13 * 24 * 3600_000, actor: "Musa Abdullahi" },
+    { from: "EVIDENCE_SUBMITTED", to: "QUALITY_CONTROL", at: now - 12 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "QUALITY_CONTROL", to: "CUSTOMER_REVIEW", at: now - 12 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "CUSTOMER_REVIEW", to: "APPROVED", at: now - 11 * 24 * 3600_000, actor: "Chiamaka Eze" },
+    { from: "APPROVED", to: "COMPLETED", at: now - 11 * 24 * 3600_000, actor: "ASOJU Team" },
+  ]);
+
+  // 2) Ibrahim Sani — Houston. Construction supervision, agent on site, overdue.
+  const saniId = "demo-cust-sani";
+  await ctx.db.insert("profiles", {
+    userId: saniId,
+    fullName: "Ibrahim Sani",
+    countryOfResidence: "United States",
+    preferredChannel: "email",
+    onboarded: true,
+    onboardedAt: now,
+    updatedAt: now,
+  });
+  const sani1 = await insertSeededCase(ctx, saniId, now, {
+    serviceType: "CONSTRUCTION_SUPERVISION",
+    description:
+      "Monitoring a 3-bedroom bungalow build in Kubwa. Contractors claim roofing starts this week — I need independent verification.",
+    location: "Kubwa, Abuja",
+    city: "Kubwa",
+    state: "FCT",
+    priority: "URGENT",
+    riskLevel: 2,
+    tier: "CONCIERGE",
+    status: "IN_PROGRESS",
+    assignedAgentName: "Musa Abdullahi",
+    scheduledFor: now - 4 * 3600_000,
+    nextAction: "Site visit in progress — evidence capture",
+    nextActionDueAt: now + 2 * 3600_000,
+    ageDays: 4,
+  });
+  for (const ev of evidenceForService("CONSTRUCTION_SUPERVISION", sani1, saniId, now - 3 * 3600_000)) {
+    await ctx.db.insert("evidence", ev);
+  }
+  // Deliberately overdue to exercise the team board's SLA flag.
+  await ctx.db.patch(sani1, { slaTargetAt: now - 6 * 3600_000, updatedAt: now });
+  await ctx.db.insert("messages", {
+    caseId: sani1,
+    senderName: "Musa Abdullahi",
+    senderRole: "asoju-team",
+    body: "On site now — roof trusses have arrived but the site is quiet. Uploading photos shortly.",
+    createdAt: now - 3 * 3600_000,
+  });
+  await seedHistory(ctx, sani1, [
+    { from: "SUBMITTED", to: "UNDER_REVIEW", at: now - 4 * 24 * 3600_000, actor: "ASOJU Concierge" },
+    { from: "UNDER_REVIEW", to: "QUOTED", at: now - 4 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "QUOTED", to: "AWAITING_PAYMENT", at: now - 3 * 24 * 3600_000, actor: "Ibrahim Sani" },
+    { from: "AWAITING_PAYMENT", to: "SCHEDULED", at: now - 3 * 24 * 3600_000, actor: "Paystack" },
+    { from: "SCHEDULED", to: "ASSIGNED", at: now - 2 * 24 * 3600_000, actor: "ASOJU Team" },
+    { from: "ASSIGNED", to: "IN_PROGRESS", at: now - 5 * 3600_000, actor: "Musa Abdullahi" },
+  ]);
+
+  // 3) Funke Adeyemi — Toronto. Fresh request awaiting a quote.
+  const funkeId = "demo-cust-funke";
+  await ctx.db.insert("profiles", {
+    userId: funkeId,
+    fullName: "Funke Adeyemi",
+    countryOfResidence: "Canada",
+    preferredChannel: "sms",
+    onboarded: true,
+    onboardedAt: now,
+    updatedAt: now,
+  });
+  const funke1 = await insertSeededCase(ctx, funkeId, now, {
+    serviceType: "ASSET_INSPECTION",
+    description:
+      "I lease out a container yard in Apapa and want a condition check of the fencing and drainage before renewing the lease.",
+    location: "Apapa, Lagos",
+    city: "Apapa",
+    state: "Lagos",
+    priority: "STANDARD",
+    riskLevel: 2,
+    tier: "ESSENTIAL",
+    status: "QUOTED",
+    nextAction: "Customer to review the quote",
+    nextActionDueAt: now + 6 * 24 * 3600_000,
+    ageDays: 0,
+  });
+  const funkeQuote = buildQuoteLines("ASSET_INSPECTION", "ESSENTIAL", "Apapa");
+  const funkeQuoteId = await ctx.db.insert("quotes", {
+    caseId: funke1,
+    userId: funkeId,
+    currency: "NGN",
+    amount: funkeQuote.amount,
+    baseAmount: funkeQuote.baseAmount,
+    nonServiceFeeAmount: funkeQuote.nonServiceFeeAmount,
+    discountAmount: funkeQuote.discountAmount,
+    lines: funkeQuote.lines,
+    expiresAt: now + 7 * 24 * 3600_000,
+    createdAt: now - 4 * 3600_000,
+  });
+  await ctx.db.patch(funke1, { quoteId: funkeQuoteId, updatedAt: now });
+  await seedHistory(ctx, funke1, [
+    { from: "SUBMITTED", to: "UNDER_REVIEW", at: now - 8 * 3600_000, actor: "ASOJU Concierge" },
+    { from: "UNDER_REVIEW", to: "QUOTED", at: now - 4 * 3600_000, actor: "ASOJU Team" },
+  ]);
 }
 
 async function insertSeededCase(

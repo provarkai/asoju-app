@@ -149,6 +149,22 @@ createRoot(document.getElementById("root")!).render(
                 }
               />
               <Route
+                path="/dashboard/team"
+                element={
+                  <RequireAuth>
+                    <Portal />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/dashboard/team/cases/:teamCaseId"
+                element={
+                  <RequireAuth>
+                    <Portal />
+                  </RequireAuth>
+                }
+              />
+              <Route
                 path="/dashboard/profile"
                 element={
                   <RequireAuth>

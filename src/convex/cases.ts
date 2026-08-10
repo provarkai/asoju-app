@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { MutationCtx, QueryCtx, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
@@ -398,14 +398,17 @@ export const issueQuote = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUser(ctx);
     const kase = await ctx.db.get(args.caseId);
-    if (!kase || kase.userId !== userId) throw new Error("Case not found");
+    const user = await ctx.db.get(userId);
+    const isAdmin = user?.role === "admin";
+    // Owners accept; admins/team may issue a quote on any case.
+    if (!kase || (kase.userId !== userId && !isAdmin)) throw new Error("Case not found");
 
     const { lines, baseAmount, nonServiceFeeAmount, discountAmount, amount, discountPercent } =
       buildQuoteLines(kase.serviceType, kase.tier, kase.city);
 
     const quoteId = await ctx.db.insert("quotes", {
       caseId: args.caseId,
-      userId,
+      userId: kase.userId, // commercial records stay owned by the customer
       currency: "NGN",
       amount,
       baseAmount,
@@ -422,7 +425,7 @@ export const issueQuote = mutation({
     await transitionCase(ctx, args.caseId, "QUOTED", "Quote prepared and sent to customer", "ASOJU Team");
     await notify(
       ctx,
-      userId,
+      kase.userId,
       "Your quote is ready",
       `A quote of ₦${amount.toLocaleString()} is ready for your review. It's valid for 7 days.`,
       args.caseId,
@@ -636,84 +639,108 @@ export function reportForService(serviceType: ServiceType, description: string) 
 // Demo engine — simulates the ASOJU team walking a case through the golden path
 // ---------------------------------------------------------------------------
 
+/** Shared golden-path simulation used by the owner (demoAdvance) and by
+ *  admins from the Team view (teamAdvanceCase). */
+async function runTeamDemoStep(
+  ctx: MutationCtx,
+  caseId: Id<"cases">,
+  evidenceOwnerId: string,
+): Promise<{ ok: boolean; quoteId?: string }> {
+  const kase = await ctx.db.get(caseId);
+  if (!kase) throw new Error("Case not found");
+  const now = Date.now();
+
+  switch (kase.status) {
+    case "SUBMITTED":
+      await transitionCase(ctx, caseId, "UNDER_REVIEW", "Triage complete — scope confirmed", "ASOJU Team");
+      break;
+    case "UNDER_REVIEW": {
+      const res = await ctx.runMutation(api.cases.issueQuote, { caseId });
+      return { ok: true, quoteId: res.quoteId };
+    }
+    case "SCHEDULED":
+      await ctx.db.patch(caseId, {
+        assignedAgentName: "Kelechi Okafor",
+        assignedAgentPhone: "+234 801 234 5678",
+        scheduledFor: now + 2 * 24 * 3600_000,
+        nextAction: "Agent to visit site and complete checklist",
+        updatedAt: now,
+      });
+      await transitionCase(ctx, caseId, "ASSIGNED", "Representative assigned to the case", "ASOJU Team");
+      break;
+    case "ASSIGNED":
+      await transitionCase(ctx, caseId, "IN_PROGRESS", "Representative checked in on site", "Kelechi Okafor");
+      await ctx.db.insert("messages", {
+        caseId,
+        senderName: "Kelechi Okafor",
+        senderRole: "asoju-team",
+        body: "Hi! I've arrived at the site and am starting the inspection now. I'll upload photos and observations as I go.",
+        createdAt: now,
+      });
+      break;
+    case "IN_PROGRESS":
+      for (const ev of evidenceForService(kase.serviceType, caseId, evidenceOwnerId, now)) {
+        await ctx.db.insert("evidence", ev);
+      }
+      await transitionCase(ctx, caseId, "EVIDENCE_SUBMITTED", "Checklist completed, evidence captured", "Kelechi Okafor");
+      break;
+    case "EVIDENCE_SUBMITTED":
+      await transitionCase(ctx, caseId, "QUALITY_CONTROL", "Evidence package under QC review", "ASOJU Team");
+      break;
+    case "QUALITY_CONTROL": {
+      const report = reportForService(kase.serviceType, kase.description);
+      const reportId = await ctx.db.insert("reports", {
+        caseId,
+        userId: kase.userId,
+        summary: report.summary,
+        findings: report.findings,
+        confidence: report.confidence,
+        qcOutcome: "APPROVED",
+        deliveredAt: now,
+        createdAt: now,
+      });
+      await ctx.db.patch(caseId, { reportId, updatedAt: now });
+      await transitionCase(ctx, caseId, "CUSTOMER_REVIEW", "Report delivered — awaiting customer approval", "ASOJU Team");
+      await notify(
+        ctx,
+        kase.userId,
+        "Your report is ready",
+        `The report for ${kase.caseNumber} is ready for your review. Please approve or request changes.`,
+        caseId,
+      );
+      break;
+    }
+    case "APPROVED":
+      await transitionCase(ctx, caseId, "COMPLETED", "Case completed", "ASOJU Team");
+      break;
+    case "COMPLETED":
+      await transitionCase(ctx, caseId, "CLOSED", "Case closed", "ASOJU Team");
+      break;
+    default:
+      throw new Error("No demo team action available for this state");
+  }
+  return { ok: true };
+}
+
 export const demoAdvance = mutation({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<{ ok: boolean; quoteId?: string }> => {
     const userId = await getAuthUser(ctx);
     const kase = await ctx.db.get(args.caseId);
     if (!kase || kase.userId !== userId) throw new Error("Case not found");
-    const now = Date.now();
+    return runTeamDemoStep(ctx, args.caseId, userId);
+  },
+});
 
-    switch (kase.status) {
-      case "SUBMITTED":
-        await transitionCase(ctx, args.caseId, "UNDER_REVIEW", "Triage complete — scope confirmed", "ASOJU Team");
-        break;
-      case "UNDER_REVIEW": {
-        const res = await ctx.runMutation(api.cases.issueQuote, { caseId: args.caseId });
-        return { ok: true, quoteId: res.quoteId };
-      }
-      case "SCHEDULED":
-        await ctx.db.patch(args.caseId, {
-          assignedAgentName: "Kelechi Okafor",
-          assignedAgentPhone: "+234 801 234 5678",
-          scheduledFor: now + 2 * 24 * 3600_000,
-          nextAction: "Agent to visit site and complete checklist",
-          updatedAt: now,
-        });
-        await transitionCase(ctx, args.caseId, "ASSIGNED", "Representative assigned to the case", "ASOJU Team");
-        break;
-      case "ASSIGNED":
-        await transitionCase(ctx, args.caseId, "IN_PROGRESS", "Representative checked in on site", "Kelechi Okafor");
-        await ctx.db.insert("messages", {
-          caseId: args.caseId,
-          senderName: "Kelechi Okafor",
-          senderRole: "asoju-team",
-          body: "Hi! I've arrived at the site and am starting the inspection now. I'll upload photos and observations as I go.",
-          createdAt: now,
-        });
-        break;
-      case "IN_PROGRESS":
-        for (const ev of evidenceForService(kase.serviceType, args.caseId, userId, now)) {
-          await ctx.db.insert("evidence", ev);
-        }
-        await transitionCase(ctx, args.caseId, "EVIDENCE_SUBMITTED", "Checklist completed, evidence captured", "Kelechi Okafor");
-        break;
-      case "EVIDENCE_SUBMITTED":
-        await transitionCase(ctx, args.caseId, "QUALITY_CONTROL", "Evidence package under QC review", "ASOJU Team");
-        break;
-      case "QUALITY_CONTROL": {
-        const report = reportForService(kase.serviceType, kase.description);
-        const reportId = await ctx.db.insert("reports", {
-          caseId: args.caseId,
-          userId,
-          summary: report.summary,
-          findings: report.findings,
-          confidence: report.confidence,
-          qcOutcome: "APPROVED",
-          deliveredAt: now,
-          createdAt: now,
-        });
-        await ctx.db.patch(args.caseId, { reportId, updatedAt: now });
-        await transitionCase(ctx, args.caseId, "CUSTOMER_REVIEW", "Report delivered — awaiting customer approval", "ASOJU Team");
-        await notify(
-          ctx,
-          userId,
-          "Your report is ready",
-          `The report for ${kase.caseNumber} is ready for your review. Please approve or request changes.`,
-          args.caseId,
-        );
-        break;
-      }
-      case "APPROVED":
-        await transitionCase(ctx, args.caseId, "COMPLETED", "Case completed", "ASOJU Team");
-        break;
-      case "COMPLETED":
-        await transitionCase(ctx, args.caseId, "CLOSED", "Case closed", "ASOJU Team");
-        break;
-      default:
-        throw new Error("No demo team action available for this state");
-    }
-    return { ok: true };
+export const teamAdvanceCase = mutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, args): Promise<{ ok: boolean; quoteId?: string }> => {
+    const userId = await getAuthUser(ctx);
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin access required");
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase) throw new Error("Case not found");
+    return runTeamDemoStep(ctx, args.caseId, kase.userId);
   },
 });
 
@@ -807,6 +834,48 @@ export const listCases = query({
   },
 });
 
+async function fetchCaseDetail(ctx: QueryCtx, caseId: Id<"cases">) {
+  const kase = await ctx.db.get(caseId);
+  if (!kase) throw new Error("Case not found");
+  const [history, quote, invoice, payments, evidence, report, messages] =
+    await Promise.all([
+      ctx.db
+        .query("caseStatusHistory")
+        .withIndex("by_case", (q) => q.eq("caseId", caseId))
+        .order("asc")
+        .collect(),
+      kase.quoteId ? ctx.db.get(kase.quoteId) : null,
+      kase.invoiceId ? ctx.db.get(kase.invoiceId) : null,
+      ctx.db
+        .query("payments")
+        .withIndex("by_case", (q) => q.eq("caseId", caseId))
+        .collect(),
+      ctx.db
+        .query("evidence")
+        .withIndex("by_case", (q) => q.eq("caseId", caseId))
+        .order("asc")
+        .collect(),
+      kase.reportId ? ctx.db.get(kase.reportId) : null,
+      ctx.db
+        .query("messages")
+        .withIndex("by_case", (q) => q.eq("caseId", caseId))
+        .order("asc")
+        .collect(),
+    ]);
+  return {
+    ...kase,
+    serviceLabel: SERVICE_META[kase.serviceType as ServiceType].label,
+    checklist: SERVICE_META[kase.serviceType as ServiceType].checklist,
+    history,
+    quote,
+    invoice,
+    payments,
+    evidence,
+    report,
+    messages,
+  };
+}
+
 export const getCase = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args) => {
@@ -817,43 +886,117 @@ export const getCase = query({
       // Non-Negotiable #6 — role/case scoping: even the owner check is explicit
       throw new Error("You don't have access to this case");
     }
-    const [history, quote, invoice, payments, evidence, report, messages] =
-      await Promise.all([
-        ctx.db
-          .query("caseStatusHistory")
-          .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
-          .order("asc")
-          .collect(),
-        kase.quoteId ? ctx.db.get(kase.quoteId) : null,
-        kase.invoiceId ? ctx.db.get(kase.invoiceId) : null,
-        ctx.db
-          .query("payments")
-          .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
-          .collect(),
-        ctx.db
-          .query("evidence")
-          .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
-          .order("asc")
-          .collect(),
-        kase.reportId ? ctx.db.get(kase.reportId) : null,
-        ctx.db
-          .query("messages")
-          .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
-          .order("asc")
-          .collect(),
-      ]);
+    return fetchCaseDetail(ctx, args.caseId);
+  },
+});
+
+/** Team (admin) view of a single customer's case — read + team actions. */
+export const teamGetCase = query({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("Not authenticated");
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin access required");
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase) throw new Error("Case not found");
+    const detail = await fetchCaseDetail(ctx, args.caseId);
+    const customer = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", kase.userId))
+      .first();
+    const owner = await ctx.db.get(kase.userId as Id<"users">);
     return {
-      ...kase,
-      serviceLabel: SERVICE_META[kase.serviceType as ServiceType].label,
-      checklist: SERVICE_META[kase.serviceType as ServiceType].checklist,
-      history,
-      quote,
-      invoice,
-      payments,
-      evidence,
-      report,
-      messages,
+      ...detail,
+      customer: {
+        fullName: customer?.fullName ?? "Customer",
+        email: owner?.email ?? undefined,
+        country: customer?.countryOfResidence ?? undefined,
+        phone: customer?.phone ?? undefined,
+      },
     };
+  },
+});
+
+/** Team (admin) board — every customer's case plus headline stats. */
+export const teamGetCases = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("Not authenticated");
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin access required");
+
+    const cases = await ctx.db.query("cases").order("desc").collect();
+    const now = Date.now();
+    const terminal = ["COMPLETED", "CLOSED", "APPROVED"];
+
+    let grossValue = 0;
+    for (const k of cases) {
+      if (k.paymentStatus === "PAID" && k.invoiceId) {
+        const inv = await ctx.db.get(k.invoiceId);
+        if (inv) grossValue += inv.amount;
+      }
+    }
+
+    const owners = [...new Set(cases.map((k) => k.userId))];
+    const nameByOwner: Record<string, string> = {};
+    for (const oid of owners) {
+      const p = await ctx.db
+        .query("profiles")
+        .withIndex("by_user", (q) => q.eq("userId", oid))
+        .first();
+      nameByOwner[oid] = p?.fullName ?? "Customer";
+    }
+
+    const stats = {
+      total: cases.length,
+      active: cases.filter(
+        (k) => !terminal.includes(k.status as string) && k.status !== "ON_HOLD",
+      ).length,
+      awaitingAction: cases.filter((k) =>
+        ["QUOTED", "AWAITING_PAYMENT", "CUSTOMER_REVIEW"].includes(k.status as string),
+      ).length,
+      overdue: cases.filter(
+        (k) =>
+          k.slaTargetAt &&
+          k.slaTargetAt < now &&
+          !terminal.includes(k.status as string) &&
+          k.status !== "ON_HOLD",
+      ).length,
+      completed: cases.filter((k) => terminal.includes(k.status as string)).length,
+      grossValue,
+    };
+
+    return {
+      stats,
+      cases: cases.map((k) => ({
+        ...k,
+        serviceLabel: SERVICE_META[k.serviceType as ServiceType].label,
+        customerName: nameByOwner[k.userId] ?? "Customer",
+      })),
+    };
+  },
+});
+
+/** Team (admin) conversation — replies from the ASOJU team side. */
+export const teamSendMessage = mutation({
+  args: { caseId: v.id("cases"), body: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUser(ctx);
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin access required");
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase) throw new Error("Case not found");
+    await ctx.db.insert("messages", {
+      caseId: args.caseId,
+      senderId: userId,
+      senderName: user.name ?? "ASOJU Team",
+      senderRole: "asoju-team",
+      body: args.body,
+      createdAt: Date.now(),
+    });
+    return { ok: true };
   },
 });
 
