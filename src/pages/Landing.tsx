@@ -289,7 +289,7 @@ export default function Landing() {
             <div className="absolute -left-4 top-8 hidden rounded-2xl border border-forest/10 bg-white px-4 py-3 shadow-xl sm:block">
               <p className="text-[11px] font-semibold text-forest/50">Quote</p>
               <p className="font-display text-lg font-bold text-forest">
-                {naira(117500)}
+                {naira(118250)}
               </p>
               <p className="text-[11px] text-forest/40">valid 7 days</p>
             </div>

@@ -366,8 +366,10 @@ export function buildQuoteLines(
     amount: baseFee,
   });
   const transport = city && city.toLowerCase().includes("lagos") ? 15000 : 25000;
+  // Pricing model: representative transport & logistics is part of the ASOJU
+  // service fee — not a separate external pass-through line.
   lines.push({
-    category: "EXTERNAL_COST",
+    category: "ASOJU_SERVICE_FEE",
     label: "Representative transport & logistics",
     amount: transport,
   });
@@ -378,7 +380,7 @@ export function buildQuoteLines(
       amount: 35000,
     });
   }
-  // Do not hide external costs inside ASOJU fees (PRD Section 4)
+  // External (non-service) costs stay itemized and are never hidden inside ASOJU fees
   const baseAmount = lines
     .filter((l) => l.category === "ASOJU_SERVICE_FEE")
     .reduce((s, l) => s + l.amount, 0);

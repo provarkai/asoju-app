@@ -160,7 +160,7 @@ export function QuoteCard({
       </div>
       <div className="flex items-center justify-between border-t border-forest/8 bg-ivory/60 px-5 py-3.5">
         <span className="text-sm text-forest/60">
-          Base {naira(quote.baseAmount)} · external {naira(quote.nonServiceFeeAmount)}
+          Service fee {naira(quote.baseAmount)} · pass-through {naira(quote.nonServiceFeeAmount)}
         </span>
         <p className="font-display text-2xl font-bold text-forest">
           {naira(quote.amount)}
@@ -188,8 +188,8 @@ export function QuoteCard({
         )}
         <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11px] text-forest/45">
           <Lock className="size-3" />
-          External &amp; professional costs are shown separately — never hidden
-          inside ASOJU fees.
+          Transport &amp; logistics are included in the ASOJU service fee.
+          Third-party &amp; tax costs are itemized separately.
         </p>
       </div>
     </div>
