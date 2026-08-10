@@ -11,12 +11,14 @@ import { StatusPill } from "@/components/portal/ui";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useAuth } from "@/hooks/use-auth";
 import {
   AlertTriangle,
   ArrowLeft,
   CalendarCheck,
   Clock,
   Loader2,
+  Lock,
   MapPin,
   Play,
   Receipt,
@@ -31,12 +33,37 @@ import { formatDate, formatDateTime, naira } from "@/lib/asoju";
 
 export function TeamCaseView({ caseId }: { caseId: string }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const caseIdTyped = caseId as Id<"cases">;
   const kase = useQuery(api.cases.teamGetCase, { caseId: caseIdTyped });
   const advance = useMutation(api.cases.teamAdvanceCase);
   const sendMessage = useMutation(api.cases.teamSendMessage);
   const [busy, setBusy] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
+
+  if (user && user.role !== "admin") {
+    return (
+      <div className="flex flex-col items-center rounded-3xl border border-dashed border-forest/20 bg-white/60 px-6 py-20 text-center">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-forest/8 text-forest">
+          <Lock className="size-7" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-semibold text-forest">
+          Admin access required
+        </h1>
+        <p className="mt-2 max-w-sm text-sm text-forest/60">
+          Customer cases are case-scoped. Sign in with an ASOJU admin account to
+          review this case from the team side.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-6 border-forest/20 text-forest hover:bg-forest hover:text-ivory"
+          onClick={() => navigate("/dashboard")}
+        >
+          Back to my cases
+        </Button>
+      </div>
+    );
+  }
 
   if (!kase) {
     return (

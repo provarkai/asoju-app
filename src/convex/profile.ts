@@ -50,14 +50,17 @@ export const ensureOnboarded = mutation({
       });
     }
 
-    // Demo bootstrap: the first person into the dashboard becomes the admin so
-    // the Team view (all customer cases) has an operator. Subsequent users stay
-    // customers unless an admin promotes them.
-    const existingAdmin = await ctx.db
+    // Demo bootstrap: the operator is the guest who opens the dashboard. Any
+    // anonymous (guest) user is promoted to admin as long as there is no named
+    // (email) admin — so the Team view is always available to the demo
+    // operator, while real named accounts stay customer-scoped.
+    const userDoc = await ctx.db.get(userId);
+    const admins = await ctx.db
       .query("users")
       .filter((q) => q.eq(q.field("role"), "admin"))
-      .first();
-    if (!existingAdmin) {
+      .collect();
+    const hasNamedAdmin = admins.some((a) => a.isAnonymous !== true);
+    if (userDoc?.isAnonymous === true && !hasNamedAdmin) {
       await ctx.db.patch(userId, { role: "admin" });
     }
 

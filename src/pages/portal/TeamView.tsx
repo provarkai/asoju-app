@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, StatCard, StatusPill } from "@/components/portal/ui";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useAuth } from "@/hooks/use-auth";
 import {
   AlertTriangle,
   ArrowUpRight,
   CircleDollarSign,
   Clock,
   FolderOpen,
+  Lock,
   Search,
   ShieldCheck,
   UsersRound,
@@ -62,11 +64,36 @@ interface TeamCaseRow {
 
 export function TeamView() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const board = useQuery(api.cases.teamGetCases);
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [service, setService] = useState("ALL");
+
+  if (user && user.role !== "admin") {
+    return (
+      <div className="flex flex-col items-center rounded-3xl border border-dashed border-forest/20 bg-white/60 px-6 py-20 text-center">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-forest/8 text-forest">
+          <Lock className="size-7" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-semibold text-forest">
+          Admin access required
+        </h1>
+        <p className="mt-2 max-w-sm text-sm text-forest/60">
+          The team board shows every customer's cases and is restricted to ASOJU
+          admin accounts. Sign in with an admin account to continue.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-6 border-forest/20 text-forest hover:bg-forest hover:text-ivory"
+          onClick={() => navigate("/dashboard")}
+        >
+          Back to my cases
+        </Button>
+      </div>
+    );
+  }
 
   const rows = useMemo(() => {
     if (!board) return [];
