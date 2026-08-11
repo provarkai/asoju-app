@@ -109,6 +109,7 @@ const TESTIMONIALS = [
   },
 ];
 
+// ASOJU landing — hero, services, golden path, trust, pricing, testimonials.
 export default function Landing() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
