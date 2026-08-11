@@ -300,8 +300,11 @@ export default function Landing() {
               </p>
               <p className="mt-0.5 text-xs text-forest/70">Request → Case in minutes</p>
             </div>
-            {/* AI Concierge — always visible; static pill below the card on small screens */}
-            <div className="mt-3 flex justify-center sm:hidden">
+            {/* Quote + AI Concierge — always visible; static pills below the card on small screens */}
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:hidden">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-forest/15 bg-white px-3.5 py-1.5 text-xs font-semibold text-forest/80 shadow-sm">
+                Quote {naira(91375)} · valid 7 days
+              </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-white px-3.5 py-1.5 text-xs font-semibold text-forest/70 shadow-sm">
                 <Sparkles className="size-3.5 text-gold" />
                 AI Concierge — Request → Case in minutes
