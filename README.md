@@ -21,6 +21,28 @@ Use bun for the package manager.
 
 This project is set up already and running on a cloud environment, as well as a convex development in the sandbox.
 
+## Quickstart (fresh clone)
+
+1. Install dependencies with bun (the only supported package manager):
+   ```bash
+   bun install
+   ```
+2. Point the app at a Convex project of your own. Create one and start codegen:
+   ```bash
+   npx convex dev
+   ```
+   This generates `src/convex/_generated/` and prints a deployment URL. Then set:
+   - `VITE_CONVEX_URL` — the deployment URL (client side, `.env.local`)
+   - `CONVEX_DEPLOYMENT` — deployment name used by the Convex CLI
+3. Set the backend env vars required by auth and email OTP (see below).
+4. Run the app:
+   ```bash
+   bun run dev
+   ```
+5. Sign in with "Continue as guest" — the first dashboard visit seeds a demo
+   portfolio (a few cases per service) and promotes the first signed-in account
+   to admin so the Team view is populated.
+
 ## Environment Variables
 
 The project is set up with project specific CONVEX_DEPLOYMENT and VITE_CONVEX_URL environment variables on the client side.
@@ -28,6 +50,11 @@ The project is set up with project specific CONVEX_DEPLOYMENT and VITE_CONVEX_UR
 The convex server has a separate set of environment variables that are accessible by the convex backend.
 
 Currently, these variables include auth-specific keys: JWKS, JWT_PRIVATE_KEY, and SITE_URL.
+
+Email OTP additionally requires `FREEBUFF_EMAIL_API_KEY` — the Freebuff email
+send key (a value like `fb_email_...`). It is read from the environment inside
+`src/convex/auth/emailOtp.ts`; email sends fail with a clear error if it is
+missing, while guest/anonymous sign-in keeps working without it.
 
 
 # Using Authentication (Important!)
@@ -38,7 +65,10 @@ You must follow these conventions when using authentication.
 
 All convex authentication functions are already set up. The auth currently uses email OTP and anonymous users, but can support more.
 
-The email OTP configuration is defined in `src/convex/auth/emailOtp.ts`. DO NOT MODIFY THIS FILE.
+The email OTP configuration is defined in `src/convex/auth/emailOtp.ts` and reads
+its API key from the `FREEBUFF_EMAIL_API_KEY` environment variable rather than
+hardcoding it, so the repository stays safe to publish. Do not hardcode
+credentials back into this file.
 
 Also, DO NOT MODIFY THESE AUTH FILES: `src/convex/auth.config.ts` and `src/convex/auth.ts`.
 
