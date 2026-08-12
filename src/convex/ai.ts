@@ -1,5 +1,6 @@
 "use node";
 
+import axios from "axios";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { createVlyIntegrations } from "@vly-ai/integrations";
 import { v } from "convex/values";
@@ -108,6 +109,60 @@ function isValidScope(raw: Record<string, unknown>): raw is CapturedScope {
   return true;
 }
 
+/** LLM call. Primary: BazaarLink (OpenAI-compatible gateway, requires
+ *  BAZAARLINK_API_KEY in the deployment env). Fallback: the platform's VLY
+ *  gateway. Never exposes keys to the client. */
+async function callLlm(
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+): Promise<string> {
+  const bazaarKey = process.env.BAZAARLINK_API_KEY;
+  const base = (process.env.BAZAARLINK_BASE_URL ?? "https://bazaarlink.ai/api/v1").replace(/\/+$/, "");
+
+  if (bazaarKey) {
+    try {
+      const res = await axios.post(
+        `${base}/chat/completions`,
+        {
+          model: process.env.BAZAARLINK_MODEL ?? "openai/gpt-4o-mini",
+          messages,
+          temperature: 0.4,
+          max_tokens: 700,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${bazaarKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        },
+      );
+      const content = res.data?.choices?.[0]?.message?.content;
+      if (typeof content !== "string" || !content.trim()) {
+        throw new Error("Empty response from LLM gateway");
+      }
+      return content;
+    } catch (e: any) {
+      const detail = e?.response?.data?.error?.message ?? e?.message;
+      console.error("[Concierge] BazaarLink failure", { detail });
+      throw new Error(detail ?? "LLM request failed");
+    }
+  }
+
+  // Fallback: platform gateway (VLY_INTEGRATION_KEY).
+  const vly = createVlyIntegrations({ deploymentToken: process.env.VLY_INTEGRATION_KEY });
+  const res = await vly.ai.completion({
+    model: "gpt-4o-mini",
+    messages,
+    temperature: 0.4,
+    maxTokens: 700,
+  });
+  if (!res.success) {
+    console.error("[Concierge] VLY gateway failure", { error: res.error });
+    throw new Error(res.error ?? "AI Concierge unavailable");
+  }
+  return res.data?.choices?.[0]?.message?.content ?? "";
+}
+
 type ChatReply =
   | { reply: string; ready: false }
   | {
@@ -136,26 +191,7 @@ export const conciergeChat = action({
       ...history.map((m) => ({ role: m.role, content: m.content })),
     ];
 
-    const vly = createVlyIntegrations({
-      deploymentToken: process.env.VLY_INTEGRATION_KEY,
-    });
-    const res = await vly.ai.completion({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.4,
-      maxTokens: 700,
-    });
-
-    if (!res.success || !res.data?.choices?.[0]?.message?.content) {
-      console.error("[Concierge] gateway failure", {
-        error: res.error,
-        keyPresent: Boolean(process.env.VLY_INTEGRATION_KEY),
-        baseUrl: process.env.VLY_INTEGRATION_BASE_URL ?? "unset",
-      });
-      throw new Error(res.error ?? "AI Concierge unavailable");
-    }
-
-    const raw = res.data.choices[0].message.content;
+    const raw = await callLlm(messages);
     const scopeMatch = raw.match(/\[SCOPE\]\s*(\{[\s\S]*\})/);
     const reply = scopeMatch ? raw.slice(0, scopeMatch.index).trim() : raw.trim();
 
