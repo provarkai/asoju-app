@@ -232,11 +232,7 @@ export default function Landing() {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="relative mx-auto w-full max-w-lg"
           >
-            <AiConciergeDemo
-              onStart={() =>
-                go(isAuthenticated ? "/dashboard/new" : "/auth?returnTo=/dashboard/new")
-              }
-            />
+            <AiConciergeDemo isAuthenticated={isAuthenticated} onNavigate={go} />
           </motion.div>
         </div>
       </section>

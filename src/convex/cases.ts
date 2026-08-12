@@ -277,6 +277,9 @@ export const createServiceRequest = mutation({
     timeline: timelineValidator,
     priority: casePriorityValidator,
     tier: caseTierValidator,
+    // Optional — set when the request came through the AI Concierge so the
+    // handoff is visible in the case thread.
+    conciergeSummary: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUser(ctx);
@@ -341,7 +344,36 @@ export const createServiceRequest = mutation({
       caseId,
     );
 
+    if (args.conciergeSummary) {
+      await ctx.db.insert("messages", {
+        caseId,
+        senderName: "ASOJU Concierge",
+        senderRole: "asoju-team",
+        body: args.conciergeSummary,
+        createdAt: now,
+      });
+    }
+
     return { caseId, caseNumber, leadTag: tag, leadScore: score };
+  },
+});
+
+/** SUBMITTED → UNDER_REVIEW — the Concierge confirms the captured scope. */
+export const triageCase = mutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUser(ctx);
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase || kase.userId !== userId) throw new Error("Case not found");
+    if (kase.status !== "SUBMITTED") throw new Error("Case is not waiting for triage");
+    await transitionCase(
+      ctx,
+      args.caseId,
+      "UNDER_REVIEW",
+      "Triage complete — scope confirmed by AI Concierge",
+      "ASOJU Concierge",
+    );
+    return { ok: true };
   },
 });
 
@@ -495,6 +527,33 @@ export const payInvoice = mutation({
       `Payment of ₦${invoice.amount.toLocaleString()} received. We're scheduling your representative.`,
       args.caseId,
     );
+
+    // Hand off to case management: notify admins (case managers) that the case
+    // is paid and ready to schedule, and note it in the case thread.
+    const admins = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("role"), "admin"))
+      .collect();
+    for (const admin of admins) {
+      await notify(
+        ctx,
+        admin._id,
+        "Payment confirmed — case ready for scheduling",
+        `${kase.caseNumber} (${SERVICE_META[kase.serviceType as ServiceType].label}) · ₦${invoice.amount.toLocaleString()} paid. Hand off to a case manager to schedule the representative.`,
+        args.caseId,
+      );
+    }
+    await ctx.db.insert("messages", {
+      caseId: args.caseId,
+      senderName: "ASOJU System",
+      senderRole: "asoju-team",
+      body: `Payment of ₦${invoice.amount.toLocaleString()} confirmed (${ref}). Handed off to the case manager for scheduling.`,
+      createdAt: Date.now(),
+    });
+    await ctx.db.patch(args.caseId, {
+      nextAction: "Case manager to schedule representative",
+      updatedAt: Date.now(),
+    });
     return { reference: ref };
   },
 });

@@ -1,196 +1,173 @@
 import { useEffect, useRef, useState } from "react";
+import { useAction } from "convex/react";
 import { motion } from "framer-motion";
 import {
-  ArrowRight,
   CheckCircle2,
+  Loader2,
   MapPin,
   RotateCcw,
   Send,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { naira } from "@/lib/asoju";
+import type {
+  CasePriority,
+  CaseTier,
+  ServiceType,
+  Timeline,
+} from "@/convex/schema";
 
-type TextMsg = { role: "user" | "ai"; text: string };
-type Msg = TextMsg | { role: "ai"; summary: true };
+export type CapturedScope = {
+  serviceType: ServiceType;
+  description: string;
+  location: string;
+  city?: string;
+  state?: string;
+  timeline: Timeline;
+  priority: CasePriority;
+  tier: CaseTier;
+};
 
-const SCRIPT: Msg[] = [
-  {
-    role: "user",
-    text: "I need a plot of land inspected in Ibeju-Lekki before I pay the balance.",
-  },
-  { role: "ai", text: "On it. Here's what I understood from your request:" },
-  { role: "ai", summary: true },
-  {
-    role: "ai",
-    text: "A human concierge confirms the scope and sends a line-item quote — usually within hours. Want me to set it up?",
-  },
+export type QuoteData = {
+  serviceLabel: string;
+  lines: { category: string; label: string; amount: number }[];
+  baseAmount: number;
+  nonServiceFeeAmount: number;
+  discountAmount: number;
+  discountPercent: number;
+  amount: number;
+};
+
+type UiMsg =
+  | { id: number; kind: "text"; role: "user" | "assistant"; text: string }
+  | {
+      id: number;
+      kind: "quote";
+      role: "assistant";
+      quote: QuoteData;
+      captured: CapturedScope;
+    };
+
+const GREETING =
+  "Hi 👋 — I'm the ASOJU AI Concierge. Tell me, in your own words, what you need handled back home: a plot or property to verify, a building site to supervise, family errands, procurement… I'll ask a couple of quick questions, then get you a real quote.";
+
+const QUICK_PROMPTS = [
+  "Verify a plot of land in Ibeju-Lekki before I pay the balance",
+  "Monitor my building project in Abuja",
+  "Check my father's farm in Oyo",
+  "Buy and deliver 10 bags of cement to Enugu",
 ];
 
-const AUTO_REPLY =
-  "Got it — captured. A human concierge will confirm the scope and follow up with your line-item quote in the portal.";
+const DRAFT_KEY = "asoju-concierge-draft";
 
-const SUMMARY_ROWS = [
-  { label: "Service", value: "Property Inspection & Verification" },
-  { label: "Location", value: "Ibeju-Lekki, Lagos" },
-  { label: "Estimate", value: `${naira(91375)} all-in (fee + VAT)` },
-  { label: "First visit target", value: "Within 48 hours" },
-];
+export default function AiConciergeDemo({
+  isAuthenticated,
+  onNavigate,
+}: {
+  isAuthenticated: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  const conciergeChat = useAction(api.ai.conciergeChat);
+  const createCase = useAction(api.ai.conciergeCreateCase);
 
-function Bubble({ msg }: { msg: TextMsg }) {
-  const user = msg.role === "user";
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className={`flex ${user ? "justify-end" : "justify-start"}`}
-    >
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed shadow-sm ${
-          user
-            ? "rounded-br-md bg-forest text-ivory"
-            : "rounded-bl-md border border-forest/10 bg-white text-forest/85"
-        }`}
-      >
-        {msg.text}
-      </div>
-    </motion.div>
-  );
-}
-
-function TypingDots() {
-  return (
-    <div className="flex justify-start">
-      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-forest/10 bg-white px-4 py-3.5 shadow-sm">
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="size-1.5 rounded-full bg-forest/50"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SummaryCard({ onStart }: { onStart: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="flex justify-end"
-    >
-      <div className="w-full max-w-[92%] overflow-hidden rounded-2xl border border-gold/35 bg-white shadow-md">
-        <div className="flex items-center justify-between border-b border-gold/20 bg-gold/10 px-4 py-2.5">
-          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-clay">
-            <Sparkles className="size-3.5 text-gold" />
-            Request captured
-          </p>
-          <span className="text-[11px] font-medium text-forest/50">ASJ draft</span>
-        </div>
-        <ul className="space-y-2 px-4 py-3.5">
-          {SUMMARY_ROWS.map((row) => (
-            <li key={row.label} className="flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="shrink-0 text-forest/50">{row.label}</span>
-              <span className="text-right font-medium text-forest">{row.value}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="border-t border-forest/8 bg-ivory/60 px-4 py-2.5">
-          <p className="flex items-start gap-1.5 text-[11px] leading-snug text-forest/60">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-forest" />
-            AI recommends — a human team confirms scope, quote &amp; schedule.
-          </p>
-        </div>
-        <div className="px-4 pb-3.5">
-          <Button
-            size="sm"
-            className="mt-2.5 w-full bg-forest text-ivory hover:bg-forest-deep"
-            onClick={onStart}
-          >
-            Start this request
-            <ArrowRight className="size-4" />
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-export default function AiConciergeDemo({ onStart }: { onStart: () => void }) {
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [typing, setTyping] = useState(false);
-  const [scriptOn, setScriptOn] = useState(true);
-  const [replayKey, setReplayKey] = useState(0);
+  const [messages, setMessages] = useState<UiMsg[]>([
+    { id: 0, kind: "text", role: "assistant", text: GREETING },
+  ]);
   const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const idRef = useRef(1);
   const endRef = useRef<HTMLDivElement>(null);
-  const scriptOnRef = useRef(true);
 
-  useEffect(() => {
-    scriptOnRef.current = scriptOn;
-  }, [scriptOn]);
-
-  // Auto-play the scripted conversation, one message at a time.
-  useEffect(() => {
-    let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const later = (fn: () => void, ms: number) => {
-      timers.push(setTimeout(fn, ms));
-    };
-
-    const step = (i: number) => {
-      if (cancelled || !scriptOnRef.current) return;
-      if (i >= SCRIPT.length) return;
-      const msg = SCRIPT[i];
-      if (msg.role === "ai" && "summary" in msg) {
-        setMessages((m) => [...m, msg]);
-        later(() => step(i + 1), 900);
-      } else if (msg.role === "ai") {
-        setTyping(true);
-        later(() => {
-          if (cancelled || !scriptOnRef.current) return;
-          setTyping(false);
-          setMessages((m) => [...m, msg]);
-          later(() => step(i + 1), 500);
-        }, 1100);
-      } else {
-        setMessages((m) => [...m, msg]);
-        later(() => step(i + 1), 950);
-      }
-    };
-
-    later(() => step(0), 300);
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    };
-  }, [replayKey]);
-
-  // Keep the newest message in view.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, typing]);
+  }, [messages, thinking]);
 
-  const send = () => {
-    const text = input.trim();
-    if (!text) return;
-    setScriptOn(false);
-    setTyping(false);
+  const nextId = () => idRef.current++;
+
+  const toHistory = (msgs: UiMsg[]) =>
+    msgs
+      .filter((m): m is Extract<UiMsg, { kind: "text" }> => m.kind === "text")
+      .map((m) => ({ role: m.role, content: m.text }));
+
+  const send = async (text?: string) => {
+    const content = (text ?? input).trim();
+    if (!content || thinking) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", text }, { role: "ai", text: AUTO_REPLY }]);
+    const userMsg: UiMsg = { id: nextId(), kind: "text", role: "user", text: content };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setThinking(true);
+    try {
+      const res = await conciergeChat({ messages: toHistory(next) });
+      setMessages((m) => [
+        ...m,
+        { id: nextId(), kind: "text", role: "assistant", text: res.reply },
+      ]);
+      if (res.ready && res.captured && res.quote) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: nextId(),
+            kind: "quote",
+            role: "assistant",
+            quote: res.quote,
+            captured: res.captured,
+          },
+        ]);
+      }
+    } catch (e) {
+      console.error(e);
+      setMessages((m) => [
+        ...m,
+        {
+          id: nextId(),
+          kind: "text",
+          role: "assistant",
+          text: "Sorry — I hit a snag reaching the concierge. Please try again in a moment.",
+        },
+      ]);
+    } finally {
+      setThinking(false);
+    }
   };
 
-  const replay = () => {
-    setScriptOn(true);
-    setTyping(false);
-    setMessages([]);
-    setReplayKey((k) => k + 1);
+  const acceptQuote = async (captured: CapturedScope) => {
+    if (!isAuthenticated) {
+      // Carry the captured scope into the portal so the wizard is pre-filled
+      // once the customer signs in.
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(captured));
+      } catch {
+        /* storage unavailable — just route */
+      }
+      onNavigate("/auth?returnTo=/dashboard/new");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await createCase({ captured });
+      toast.success(`Case ${res.caseNumber} created — your quote is ready`);
+      onNavigate(`/dashboard/cases/${res.caseId}`);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Could not create your case");
+      setCreating(false);
+    }
   };
+
+  const reset = () => {
+    setMessages([{ id: nextId(), kind: "text", role: "assistant", text: GREETING }]);
+    setThinking(false);
+    setCreating(false);
+    setInput("");
+  };
+
+  const showChips = !thinking && messages.length <= 2;
 
   return (
     <div className="relative">
@@ -206,13 +183,15 @@ export default function AiConciergeDemo({ onStart }: { onStart: () => void }) {
             <p className="font-display text-sm font-semibold leading-tight text-ivory">
               AI Concierge
             </p>
-            <p className="text-[11px] text-ivory/60">ASOJU · capturing your request</p>
+            <p className="text-[11px] text-ivory/60">
+              {thinking ? "Thinking…" : "ASOJU · captures your request"}
+            </p>
           </div>
           <button
             type="button"
-            onClick={replay}
-            aria-label="Replay conversation"
-            title="Replay"
+            onClick={reset}
+            aria-label="Start a new conversation"
+            title="New conversation"
             className="rounded-lg p-2 text-ivory/70 transition-colors hover:bg-ivory/10 hover:text-ivory"
           >
             <RotateCcw className="size-4" />
@@ -220,20 +199,43 @@ export default function AiConciergeDemo({ onStart }: { onStart: () => void }) {
         </div>
 
         {/* conversation */}
-        <div className="h-[380px] space-y-3 overflow-y-auto bg-ivory/40 px-4 py-5 sm:h-[420px]">
-          {messages.map((msg, i) =>
-            "summary" in msg ? (
-              <SummaryCard key={i} onStart={onStart} />
+        <div className="h-[400px] space-y-3 overflow-y-auto bg-ivory/40 px-4 py-5 sm:h-[430px]">
+          {messages.map((msg) =>
+            msg.kind === "quote" ? (
+              <QuoteCard
+                key={msg.id}
+                quote={msg.quote}
+                captured={msg.captured}
+                creating={creating}
+                isAuthenticated={isAuthenticated}
+                onAccept={() => acceptQuote(msg.captured)}
+              />
             ) : (
-              <Bubble key={i} msg={msg} />
+              <Bubble key={msg.id} user={msg.role === "user"} text={msg.text} />
             ),
           )}
-          {typing && <TypingDots />}
+          {thinking && <TypingDots />}
           <div ref={endRef} />
         </div>
 
+        {/* quick prompts */}
+        {showChips && (
+          <div className="flex flex-wrap gap-2 border-t border-forest/8 bg-white px-4 pt-3">
+            {QUICK_PROMPTS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => send(p)}
+                className="rounded-full border border-forest/15 bg-ivory/60 px-3 py-1.5 text-left text-[11px] font-medium text-forest/75 transition-colors hover:border-forest/35 hover:bg-white"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* input */}
-        <div className="flex items-center gap-2 border-t border-forest/8 bg-white px-4 py-3">
+        <div className="flex items-center gap-2 bg-white px-4 py-3">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -243,15 +245,16 @@ export default function AiConciergeDemo({ onStart }: { onStart: () => void }) {
                 send();
               }
             }}
+            disabled={thinking}
             placeholder="Describe what needs handling back home…"
-            className="h-10 flex-1 rounded-xl border border-forest/15 bg-ivory/50 px-3.5 text-sm text-forest placeholder:text-forest/40 focus:border-forest/40 focus:outline-none focus:ring-2 focus:ring-forest/10"
+            className="h-10 flex-1 rounded-xl border border-forest/15 bg-ivory/50 px-3.5 text-sm text-forest placeholder:text-forest/40 focus:border-forest/40 focus:outline-none focus:ring-2 focus:ring-forest/10 disabled:opacity-60"
           />
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             aria-label="Send message"
+            disabled={!input.trim() || thinking}
             className="flex size-10 items-center justify-center rounded-xl bg-forest text-ivory shadow-sm transition-colors hover:bg-forest-deep disabled:opacity-40"
-            disabled={!input.trim()}
           >
             <Send className="size-4" />
           </button>
@@ -277,5 +280,144 @@ export default function AiConciergeDemo({ onStart }: { onStart: () => void }) {
         </span>
       </div>
     </div>
+  );
+}
+
+function Bubble({ user, text }: { user: boolean; text: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className={`flex ${user ? "justify-end" : "justify-start"}`}
+    >
+      <div
+        className={`max-w-[85%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed shadow-sm ${
+          user
+            ? "rounded-br-md bg-forest text-ivory"
+            : "rounded-bl-md border border-forest/10 bg-white text-forest/85"
+        }`}
+      >
+        {text}
+      </div>
+    </motion.div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-forest/10 bg-white px-4 py-3.5 shadow-sm">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="size-1.5 rounded-full bg-forest/50"
+            animate={{ opacity: [0.3, 1, 0.3] }}
+            transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuoteCard({
+  quote,
+  captured,
+  creating,
+  isAuthenticated,
+  onAccept,
+}: {
+  quote: QuoteData;
+  captured: CapturedScope;
+  creating: boolean;
+  isAuthenticated: boolean;
+  onAccept: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="flex justify-end"
+    >
+      <div className="w-full max-w-[95%] overflow-hidden rounded-2xl border border-gold/35 bg-white shadow-md">
+        <div className="flex items-center justify-between border-b border-gold/20 bg-gold/10 px-4 py-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-clay">
+            <Sparkles className="size-3.5 text-gold" />
+            Quote ready
+          </p>
+          <span className="flex items-center gap-1 text-[11px] font-medium text-forest/60">
+            <CheckCircle2 className="size-3.5 text-forest" />
+            {quote.serviceLabel}
+          </span>
+        </div>
+
+        <ul className="space-y-1.5 px-4 py-3">
+          {quote.lines.map((line, i) => (
+            <li
+              key={i}
+              className="flex items-baseline justify-between gap-3 text-[13px]"
+            >
+              <span className="text-forest/70">{line.label}</span>
+              <span className="shrink-0 font-medium text-forest">
+                {naira(line.amount)}
+              </span>
+            </li>
+          ))}
+          {quote.discountAmount > 0 && (
+            <li className="flex items-baseline justify-between gap-3 text-[13px] text-forest/60">
+              <span>Concierge discount ({quote.discountPercent}%)</span>
+              <span className="shrink-0 font-medium text-forest">
+                −{naira(quote.discountAmount)}
+              </span>
+            </li>
+          )}
+        </ul>
+
+        <div className="flex items-baseline justify-between border-t border-forest/8 bg-ivory/60 px-4 py-2.5">
+          <span className="text-sm font-semibold text-forest">Total</span>
+          <span className="font-display text-lg font-bold text-forest">
+            {naira(quote.amount)}
+          </span>
+        </div>
+
+        <p className="flex items-start gap-1.5 px-4 pb-2 text-[11px] leading-snug text-forest/55">
+          <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-forest" />
+          All-in service fee — representative transport &amp; logistics
+          included. VAT and third-party costs itemized. Valid 7 days.
+        </p>
+
+        <div className="px-4 pb-3.5">
+          <Button
+            size="sm"
+            className="mt-1 w-full bg-forest text-ivory hover:bg-forest-deep"
+            disabled={creating}
+            onClick={onAccept}
+          >
+            {creating ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Creating your case…
+              </>
+            ) : (
+              <>
+                Accept &amp; create my case
+                <Sparkles className="size-4 text-gold-light" />
+              </>
+            )}
+          </Button>
+          <p className="mt-1.5 text-center text-[11px] text-forest/50">
+            {isAuthenticated
+              ? "Creates your case — you approve payment before we schedule."
+              : "You'll be asked to sign in first — your request carries over."}
+          </p>
+        </div>
+
+        <p className="border-t border-forest/8 bg-ivory/40 px-4 py-2 text-[11px] text-forest/50">
+          📍 {captured.location} · {quote.serviceLabel}
+        </p>
+      </div>
+    </motion.div>
   );
 }

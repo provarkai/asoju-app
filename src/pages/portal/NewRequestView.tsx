@@ -20,7 +20,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,36 @@ export function NewRequestView() {
   const [priority, setPriority] = useState<CasePriority>("STANDARD");
   const [tier, setTier] = useState<CaseTier>("ESSENTIAL");
   const [submitting, setSubmitting] = useState(false);
+
+  // Pre-fill from a Concierge chat draft (carried via sessionStorage when the
+  // customer accepted a quote before signing in).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("asoju-concierge-draft");
+      if (!raw) return;
+      sessionStorage.removeItem("asoju-concierge-draft");
+      const d = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof d.serviceType === "string" && SERVICES.some((s) => s.type === d.serviceType)) {
+        setServiceType(d.serviceType as ServiceType);
+      }
+      if (typeof d.description === "string") setDescription(d.description);
+      if (typeof d.location === "string") setLocation(d.location);
+      if (typeof d.city === "string") setCity(d.city);
+      if (typeof d.state === "string") setState(d.state);
+      if (typeof d.timeline === "string" && TIMELINES.some((t) => t.key === d.timeline)) {
+        setTimeline(d.timeline as Timeline);
+      }
+      if (typeof d.priority === "string" && PRIORITIES.some((p) => p.key === d.priority)) {
+        setPriority(d.priority as CasePriority);
+      }
+      if (typeof d.tier === "string" && TIERS.some((t) => t.key === d.tier)) {
+        setTier(d.tier as CaseTier);
+      }
+      toast.info("Pre-filled from your Concierge chat — review and submit.");
+    } catch {
+      /* malformed draft — ignore */
+    }
+  }, []);
 
   const canNext =
     step === 0
