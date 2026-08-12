@@ -109,18 +109,16 @@ function isValidScope(raw: Record<string, unknown>): raw is CapturedScope {
   return true;
 }
 
-/** One chat-completion call against the BazaarLink OpenAI-compatible API. */
-async function bazaarCompletion(
+/** One chat-completion call against an OpenAI-compatible gateway. */
+async function openAiCompatibleCompletion(
+  base: string,
+  apiKey: string,
   model: string,
   messages: { role: "system" | "user" | "assistant"; content: string }[],
   maxTokens: number,
 ): Promise<string> {
-  const base = (process.env.BAZAARLINK_BASE_URL ?? "https://bazaarlink.ai/api/v1").replace(
-    /\/+$/,
-    "",
-  );
   const res = await axios.post(
-    `${base}/chat/completions`,
+    `${base.replace(/\/+$/, "")}/chat/completions`,
     {
       model,
       messages,
@@ -129,7 +127,7 @@ async function bazaarCompletion(
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.BAZAARLINK_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       timeout: 30000,
@@ -142,40 +140,76 @@ async function bazaarCompletion(
   return content;
 }
 
+/** Tries a provider's model chain in order; returns null if no key or all fail. */
+async function tryLlmChain(
+  provider: string,
+  base: string,
+  apiKey: string | undefined,
+  candidates: { model: string; maxTokens: number }[],
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+): Promise<string | null> {
+  if (!apiKey) return null;
+  const errors: string[] = [];
+  for (const c of candidates) {
+    try {
+      return await openAiCompatibleCompletion(base, apiKey, c.model, messages, c.maxTokens);
+    } catch (e: any) {
+      const detail = e?.response?.data?.error?.message ?? e?.message ?? String(e);
+      errors.push(`${c.model}: ${detail}`);
+      console.error("[Concierge] candidate failed", { provider, model: c.model, detail });
+    }
+  }
+  console.error(`[Concierge] ${provider} chain failed`, errors);
+  return null;
+}
+
 /**
- * LLM call. Primary: BazaarLink (OpenAI-compatible gateway). Tries the paid
- * default first, then the free models (rate-limited and best-effort, but they
- * work without a balance). Falls back to the platform VLY gateway if no
- * BAZAARLINK_API_KEY is configured. Never exposes keys to the client.
+ * LLM call. Provider order: OpenRouter → BazaarLink → platform VLY gateway.
+ * Each OpenAI-compatible provider tries a paid default first, then free models
+ * (best-effort) when the account lacks credits. Keys are read from the
+ * deployment env and never exposed to the client.
  */
 async function callLlm(
   messages: { role: "system" | "user" | "assistant"; content: string }[],
 ): Promise<string> {
-  const bazaarKey = process.env.BAZAARLINK_API_KEY;
+  const chainErrors: string[] = [];
 
-  if (bazaarKey) {
-    const override = process.env.BAZAARLINK_MODEL;
-    const candidates: { model: string; maxTokens: number }[] = override
-      ? [{ model: override, maxTokens: 1500 }]
+  // 1) OpenRouter (primary — user's key has balance).
+  const orOverride = process.env.OPENROUTER_MODEL;
+  const orReply = await tryLlmChain(
+    "OpenRouter",
+    process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
+    process.env.OPENROUTER_API_KEY,
+    orOverride
+      ? [{ model: orOverride, maxTokens: 1500 }]
+      : [
+          { model: "openai/gpt-4o-mini", maxTokens: 700 },
+          { model: "google/gemma-4-26b-a4b-it:free", maxTokens: 1500 },
+        ],
+    messages,
+  );
+  if (orReply) return orReply;
+  if (process.env.OPENROUTER_API_KEY) chainErrors.push("OpenRouter: all models failed");
+
+  // 2) BazaarLink.
+  const bzOverride = process.env.BAZAARLINK_MODEL;
+  const bzReply = await tryLlmChain(
+    "BazaarLink",
+    process.env.BAZAARLINK_BASE_URL ?? "https://bazaarlink.ai/api/v1",
+    process.env.BAZAARLINK_API_KEY,
+    bzOverride
+      ? [{ model: bzOverride, maxTokens: 1500 }]
       : [
           { model: "openai/gpt-4o-mini", maxTokens: 700 },
           { model: "deepseek/deepseek-v4-flash:free", maxTokens: 2000 },
           { model: "qwen/qwen3.7-flash:free", maxTokens: 1500 },
-        ];
-    const errors: string[] = [];
-    for (const c of candidates) {
-      try {
-        return await bazaarCompletion(c.model, messages, c.maxTokens);
-      } catch (e: any) {
-        const detail = e?.response?.data?.error?.message ?? e?.message ?? String(e);
-        errors.push(`${c.model}: ${detail}`);
-        console.error("[Concierge] candidate failed", { model: c.model, detail });
-      }
-    }
-    throw new Error(errors.join(" | "));
-  }
+        ],
+    messages,
+  );
+  if (bzReply) return bzReply;
+  if (process.env.BAZAARLINK_API_KEY) chainErrors.push("BazaarLink: all models failed");
 
-  // Fallback: platform gateway (VLY_INTEGRATION_KEY).
+  // 3) Platform VLY gateway.
   const vly = createVlyIntegrations({ deploymentToken: process.env.VLY_INTEGRATION_KEY });
   const res = await vly.ai.completion({
     model: "gpt-4o-mini",
@@ -183,11 +217,14 @@ async function callLlm(
     temperature: 0.4,
     maxTokens: 700,
   });
-  if (!res.success) {
-    console.error("[Concierge] VLY gateway failure", { error: res.error });
-    throw new Error(res.error ?? "AI Concierge unavailable");
+  if (res.success && res.data?.choices?.[0]?.message?.content) {
+    return res.data.choices[0].message.content;
   }
-  return res.data?.choices?.[0]?.message?.content ?? "";
+  console.error("[Concierge] VLY gateway failure", { error: res.error });
+
+  throw new Error(
+    chainErrors.length > 0 ? chainErrors.join(" | ") : "AI Concierge unavailable",
+  );
 }
 
 type ChatReply =
