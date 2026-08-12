@@ -39,11 +39,43 @@ export const casePriorityValidator = v.union(
 );
 export type CasePriority = Infer<typeof casePriorityValidator>;
 
+// PRD §2.1 — Subscription + overage. ESSENTIAL = pay-per-service (no plan);
+// PRIORITY / PREMIUM = monthly subscriptions with Special Credit + discount.
 export const caseTierValidator = v.union(
   v.literal("ESSENTIAL"),
-  v.literal("CONCIERGE"),
+  v.literal("PRIORITY"),
+  v.literal("PREMIUM"),
 );
 export type CaseTier = Infer<typeof caseTierValidator>;
+
+// PRD §2.2 — Deterministic regional quoting zones.
+export const regionZoneValidator = v.union(
+  v.literal("LAGOS"),
+  v.literal("SOUTH_WEST"),
+  v.literal("OTHER"),
+);
+export type RegionZone = Infer<typeof regionZoneValidator>;
+
+export const subscriptionPlanValidator = v.union(
+  v.literal("PRIORITY"),
+  v.literal("PREMIUM"),
+);
+export type SubscriptionPlan = Infer<typeof subscriptionPlanValidator>;
+
+export const disputeStatusValidator = v.union(
+  v.literal("OPEN"),
+  v.literal("RESOLVED"),
+);
+export type DisputeStatus = Infer<typeof disputeStatusValidator>;
+
+export const vaultCategoryValidator = v.union(
+  v.literal("TITLE_DEED"),
+  v.literal("CAC_CERT"),
+  v.literal("POWER_OF_ATTORNEY"),
+  v.literal("IDENTITY"),
+  v.literal("OTHER"),
+);
+export type VaultCategory = Infer<typeof vaultCategoryValidator>;
 
 export const caseStatusValidator = v.union(
   v.literal("SUBMITTED"),
@@ -61,6 +93,7 @@ export const caseStatusValidator = v.union(
   v.literal("COMPLETED"),
   v.literal("CLOSED"),
   v.literal("ON_HOLD"),
+  v.literal("DISPUTED"),
 );
 export type CaseStatus = Infer<typeof caseStatusValidator>;
 
@@ -198,6 +231,8 @@ const schema = defineSchema(
       // Commercial
       quoteId: v.optional(v.id("quotes")),
       invoiceId: v.optional(v.id("invoices")),
+      // PRD §2.2 — regional quoting zone (drives multipliers + SC eligibility)
+      regionZone: v.optional(regionZoneValidator),
       // Execution
       assignedAgentName: v.optional(v.string()),
       assignedAgentPhone: v.optional(v.string()),
@@ -238,6 +273,13 @@ const schema = defineSchema(
       lines: v.array(quoteLineValidator),
       expiresAt: v.number(),
       acceptedAt: v.optional(v.number()),
+      // PRD §4.3 — FX lock & transparency
+      lockedFxRate: v.optional(v.number()),
+      sourceCurrency: v.optional(v.string()),
+      fxLockExpiry: v.optional(v.number()),
+      // PRD §2.1 — Special Credit applied to this quote (₦ value)
+      scApplied: v.optional(v.boolean()),
+      scAmount: v.optional(v.number()),
       createdAt: v.number(),
     }).index("by_case", ["caseId"]),
 
@@ -329,6 +371,55 @@ const schema = defineSchema(
       phone: v.optional(v.string()),
       notes: v.optional(v.string()),
       hasPortalAccess: v.boolean(),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
+
+    // PRD §2.1 — Subscription + overage (Priority / Premium)
+    subscriptions: defineTable({
+      userId: v.string(),
+      plan: subscriptionPlanValidator,
+      status: v.union(v.literal("active"), v.literal("cancelled")),
+      monthlyFeeUsd: v.number(),
+      scUsd: v.number(),
+      scUsedThisCycle: v.boolean(),
+      scUsedOnCaseId: v.optional(v.id("cases")),
+      cycleStartedAt: v.number(),
+      cycleEndsAt: v.number(),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
+
+    // PRD §3.1 — Customer dispute / rejection workflow
+    disputes: defineTable({
+      caseId: v.id("cases"),
+      userId: v.string(),
+      reasons: v.array(v.string()),
+      notes: v.optional(v.string()),
+      status: disputeStatusValidator,
+      resolvedAt: v.optional(v.number()),
+      resolvedBy: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_case", ["caseId"]),
+
+    // PRD §4.1 — Digital document vault ("My Nigeria" locker)
+    vaultDocuments: defineTable({
+      userId: v.string(),
+      name: v.string(),
+      category: vaultCategoryValidator,
+      notes: v.optional(v.string()),
+      mediaUrl: v.optional(v.string()),
+      isVerified: v.boolean(),
+      verifiedAt: v.optional(v.number()),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
+
+    // PRD §4.2 — Reusable, staff-verified assets (e.g. Power of Attorney)
+    verifiedAssets: defineTable({
+      userId: v.string(),
+      type: vaultCategoryValidator,
+      name: v.string(),
+      verified: v.boolean(),
+      verifiedAt: v.optional(v.number()),
+      notes: v.optional(v.string()),
       createdAt: v.number(),
     }).index("by_user", ["userId"]),
 

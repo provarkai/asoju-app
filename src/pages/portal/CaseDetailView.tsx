@@ -1,6 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   EvidenceGrid,
   MessageThread,
   QuoteCard,
@@ -26,6 +34,7 @@ import {
   Play,
   Receipt,
   RotateCcw,
+  Scale,
   ShieldCheck,
   UserRound,
   Wallet,
@@ -34,12 +43,28 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatDate, formatDateTime, naira } from "@/lib/asoju";
+import {
+  CONSTRUCTION_MILESTONES,
+  formatDate,
+  formatDateTime,
+  naira,
+  PLAN_LABEL,
+  REGION_LABEL,
+} from "@/lib/asoju";
+
+const DISPUTE_REASONS = [
+  "Evidence missing or unclear",
+  "Facts in the report are incorrect",
+  "Photos don't match what I know",
+  "Unresolved issues were not flagged",
+  "Something else",
+];
 
 export function CaseDetailView({ caseId }: { caseId: string }) {
   const navigate = useNavigate();
   const caseIdTyped = caseId as Id<"cases">;
   const kase = useQuery(api.cases.getCase, { caseId: caseIdTyped });
+  const sub = useQuery(api.commercial.getSubscription);
   const [busy, setBusy] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
 
@@ -48,9 +73,13 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
   const demoAdvance = useMutation(api.cases.demoAdvance);
   const approveReport = useMutation(api.cases.approveReport);
   const requestAdditionalWork = useMutation(api.cases.requestAdditionalWork);
+  const raiseDispute = useMutation(api.cases.raiseDispute);
   const holdCase = useMutation(api.cases.holdCase);
   const resumeCase = useMutation(api.cases.resumeCase);
   const sendMessage = useMutation(api.cases.sendMessage);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReasons, setDisputeReasons] = useState<string[]>([]);
+  const [disputeNotes, setDisputeNotes] = useState("");
 
   if (!kase) {
     return (
@@ -94,6 +123,7 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
     "QUALITY_CONTROL",
     "APPROVED",
     "COMPLETED",
+    "DISPUTED",
   ].includes(status);
 
   const canHold = [
@@ -119,9 +149,53 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
     QUALITY_CONTROL: "Simulate report delivery",
     APPROVED: "Simulate completion",
     COMPLETED: "Simulate closure",
+    DISPUTED: "Simulate dispute resolution → rework",
   };
 
   const checkoutDone = (kase.payments ?? []).some((p) => p.status === "PAID");
+
+  // PRD §3.3 — milestone completion for construction supervision.
+  const taskDone = (item: string) =>
+    kase.evidence.some(
+      (e) =>
+        item.toLowerCase().startsWith(e.title.toLowerCase().split(" ")[0]) ||
+        e.title.toLowerCase().includes(item.toLowerCase().split(" ")[0]),
+    );
+  const milestones =
+    kase.serviceType === "CONSTRUCTION_SUPERVISION"
+      ? CONSTRUCTION_MILESTONES.map((m) => {
+          const total = m.items.length;
+          const done = m.items.filter(taskDone).length;
+          return { ...m, done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+        })
+      : [];
+  const milestoneDone = milestones.reduce((s, m) => s + m.done, 0);
+  const milestoneTotal = milestones.reduce((s, m) => s + m.total, 0);
+  const overallPct = milestoneTotal ? Math.round((milestoneDone / milestoneTotal) * 100) : 0;
+
+  const submitDispute = async () => {
+    if (disputeReasons.length === 0) {
+      toast.error("Select at least one disputed item");
+      return;
+    }
+    setBusy("dispute");
+    try {
+      await raiseDispute({
+        caseId: caseIdTyped,
+        reasons: disputeReasons,
+        notes: disputeNotes.trim() || undefined,
+      });
+      toast.success("Dispute filed — report locked, rework scheduled");
+      setDisputeOpen(false);
+      setDisputeReasons([]);
+      setDisputeNotes("");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -265,7 +339,29 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
                 <RotateCcw className="size-4" />
                 Request changes
               </Button>
+              <Button
+                variant="outline"
+                className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                disabled={busy !== null}
+                onClick={() => setDisputeOpen(true)}
+              >
+                <Scale className="size-4" />
+                Dispute report
+              </Button>
             </div>
+          </div>
+        )}
+
+        {status === "DISPUTED" && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+              <Scale className="size-4" />
+              Report disputed — rework scheduled
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-700">
+              The report is locked. Our team is addressing the disputed items and
+              will return with updated evidence for your review.
+            </p>
           </div>
         )}
 
@@ -358,8 +454,8 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
                 ["Priority", kase.priority],
-                ["Tier", kase.tier === "CONCIERGE" ? "Concierge" : "Essential"],
-                ["Risk level", `${kase.riskLevel}/4`],
+                ["Plan", PLAN_LABEL[kase.tier] ?? kase.tier],
+                ["Region", REGION_LABEL[kase.regionZone ?? "OTHER"] ?? kase.regionZone],
                 ["Payment", checkoutDone ? "Paid" : kase.paymentStatus],
               ].map(([l, val]) => (
                 <div key={l} className="rounded-xl border border-forest/8 bg-ivory/50 p-3.5">
@@ -376,32 +472,63 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
             )}
           </section>
 
-          {/* Checklist */}
+          {/* Checklist / PRD §3.3 milestone tracker */}
           <section className="rounded-2xl border border-forest/10 bg-white p-5 shadow-sm">
-            <h2 className="font-display text-lg font-semibold text-forest">Field checklist</h2>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {kase.checklist.map((item: string, i: number) => {
-                const done = kase.evidence.some((e) =>
-                  item.toLowerCase().startsWith(e.title.toLowerCase().split(" ")[0]) ||
-                  e.title.toLowerCase().includes(item.toLowerCase().split(" ")[0]),
-                );
-                return (
-                  <li key={i} className="flex items-center gap-2.5 text-sm text-forest/70">
-                    <span
-                      className={cn(
-                        "flex size-5 shrink-0 items-center justify-center rounded-full border",
-                        done
-                          ? "border-emerald-300 bg-emerald-50 text-emerald-600"
-                          : "border-forest/20 text-transparent",
-                      )}
-                    >
-                      <CheckCircle2 className="size-3.5" />
-                    </span>
-                    {item}
-                  </li>
-                );
-              })}
-            </ul>
+            <h2 className="flex items-center justify-between font-display text-lg font-semibold text-forest">
+              {kase.serviceType === "CONSTRUCTION_SUPERVISION"
+                ? "Construction progress"
+                : "Field checklist"}
+              {milestones.length > 0 && (
+                <span className="rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-semibold text-clay">
+                  {overallPct}% complete
+                </span>
+              )}
+            </h2>
+            {milestones.length > 0 ? (
+              <div className="mt-4 space-y-4">
+                {milestones.map((m) => (
+                  <div key={m.key}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-forest">{m.label}</span>
+                      <span className="text-xs font-semibold text-forest/55">
+                        {m.done}/{m.total} · {m.pct}%
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-forest/8">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-forest to-gold transition-all duration-500"
+                        style={{ width: `${m.pct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] leading-relaxed text-forest/50">
+                  Percentages are computed from the confirmed case scope and
+                  completed field tasks — updated in real time as evidence lands.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {kase.checklist.map((item: string, i: number) => {
+                  const done = taskDone(item);
+                  return (
+                    <li key={i} className="flex items-center gap-2.5 text-sm text-forest/70">
+                      <span
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          done
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                            : "border-forest/20 text-transparent",
+                        )}
+                      >
+                        <CheckCircle2 className="size-3.5" />
+                      </span>
+                      {item}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           {/* Timeline */}
@@ -434,8 +561,16 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
               quote={quote}
               accepted={Boolean(quote.acceptedAt)}
               busy={busy === "accept"}
-              onAccept={() =>
-                run("accept", () => acceptQuote({ caseId: caseIdTyped }), "Quote accepted — invoice created")
+              regionZone={kase.regionZone}
+              subActive={Boolean(sub?.subscription)}
+              scEligible={(kase.regionZone ?? "OTHER") !== "OTHER"}
+              scUsd={sub?.subscription?.scUsd ?? 0}
+              onAccept={(useSC) =>
+                run(
+                  "accept",
+                  () => acceptQuote({ caseId: caseIdTyped, useSC }),
+                  useSC ? "Quote accepted — Special Credit applied" : "Quote accepted — invoice created",
+                )
               }
             />
           )}
@@ -531,6 +666,72 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
           </div>
         </div>
       </div>
+
+      {/* PRD §3.1 — formal dispute form */}
+      <Dialog open={disputeOpen} onOpenChange={setDisputeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="size-5 text-clay" />
+              Dispute this report
+            </DialogTitle>
+            <DialogDescription>
+              The report will be locked and a rework scheduled on the disputed
+              items. Select everything that's wrong:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {DISPUTE_REASONS.map((r) => {
+              const on = disputeReasons.includes(r);
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() =>
+                    setDisputeReasons((cur) => (on ? cur.filter((x) => x !== r) : [...cur, r]))
+                  }
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors",
+                    on
+                      ? "border-clay bg-clay/10 text-clay"
+                      : "border-forest/10 bg-white text-forest hover:border-forest/30",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                      on ? "border-clay bg-clay text-white" : "border-forest/25",
+                    )}
+                  >
+                    {on && <CheckCircle2 className="size-3.5" />}
+                  </span>
+                  {r}
+                </button>
+              );
+            })}
+            <textarea
+              value={disputeNotes}
+              onChange={(e) => setDisputeNotes(e.target.value)}
+              rows={3}
+              placeholder="Add details — what did you expect, and what did you find?"
+              className="w-full resize-none rounded-xl border border-forest/15 bg-ivory/50 px-4 py-3 text-sm outline-none transition-colors focus:border-forest/40 focus:bg-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDisputeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-clay text-ivory hover:bg-clay/90"
+              disabled={busy === "dispute"}
+              onClick={submitDispute}
+            >
+              {busy === "dispute" ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
+              File dispute
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

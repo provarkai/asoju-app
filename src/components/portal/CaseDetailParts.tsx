@@ -16,6 +16,8 @@ import {
 import { useState } from "react";
 import {
   CaseStatusKey,
+  FX_RATE_NGN_PER_USD,
+  REGION_LABEL,
   STATUS_META,
   formatDateTime,
   naira,
@@ -93,6 +95,13 @@ export interface QuoteData {
   expiresAt: number;
   acceptedAt?: number;
   createdAt: number;
+  // PRD §4.3 — FX lock
+  lockedFxRate?: number;
+  sourceCurrency?: string;
+  fxLockExpiry?: number;
+  // PRD §2.1 — Special Credit applied
+  scApplied?: boolean;
+  scAmount?: number;
 }
 
 const LINE_TONE: Record<string, string> = {
@@ -114,14 +123,29 @@ export function QuoteCard({
   onAccept,
   busy,
   accepted,
+  regionZone,
+  scEligible = false,
+  scUsd = 0,
+  subActive = false,
 }: {
   quote: QuoteData;
-  onAccept?: () => void; // omit for a read-only (team) view
+  onAccept?: (useSC?: boolean) => void; // omit for a read-only (team) view
   busy?: boolean;
   accepted: boolean;
+  // PRD §2 — SC / region context
+  regionZone?: string;
+  scEligible?: boolean;
+  scUsd?: number;
+  subActive?: boolean;
 }) {
   const [now] = useState(() => Date.now());
+  const [useSC, setUseSC] = useState(false);
   const expired = quote.expiresAt < now;
+  const fx = quote.lockedFxRate ?? FX_RATE_NGN_PER_USD;
+  const usdEquivalent = Math.round(quote.amount / fx);
+  const scNaira = Math.round(scUsd * fx);
+  const scDisabled = !scEligible || (regionZone === "OTHER");
+  const showSC = !accepted && !expired && Boolean(onAccept) && (subActive || scEligible);
   return (
     <div className="overflow-hidden rounded-2xl border border-forest/10 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-forest/8 bg-forest px-5 py-3.5 text-ivory">
@@ -157,6 +181,12 @@ export function QuoteCard({
             </span>
           </div>
         )}
+        {quote.scApplied && (quote.scAmount ?? 0) > 0 && (
+          <div className="flex items-start justify-between gap-4 py-3">
+            <p className="text-sm font-medium text-gold">Special Credit applied</p>
+            <span className="text-sm font-semibold text-gold">−{naira(quote.scAmount ?? 0)}</span>
+          </div>
+        )}
       </div>
       <div className="flex items-center justify-between border-t border-forest/8 bg-ivory/60 px-5 py-3.5">
         <span className="text-sm text-forest/60">
@@ -168,6 +198,35 @@ export function QuoteCard({
         </p>
       </div>
       <div className="px-5 pb-5">
+        {!accepted && !expired && Boolean(onAccept) && (showSC || scDisabled) && (
+          <div className="mb-3 rounded-xl border border-gold/30 bg-gold/5 p-3">
+            {scDisabled && regionZone === "OTHER" ? (
+              <p className="flex items-start gap-2 text-[11px] leading-snug text-forest/60">
+                <Lock className="mt-0.5 size-3.5 shrink-0 text-clay" />
+                Special Credit isn't available for {REGION_LABEL[regionZone] ?? "this region"} —
+                full amount payable (minus your plan discount, if any).
+              </p>
+            ) : subActive ? (
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={useSC}
+                  onChange={(e) => setUseSC(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-forest"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-forest">
+                    Apply Special Credit (${scUsd} SC)
+                  </span>
+                  <span className="block text-[11px] leading-snug text-forest/55">
+                    ≈ {naira(scNaira)} at the locked rate. Single-use this cycle —
+                    any unused balance is forfeited.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+          </div>
+        )}
         {accepted ? (
           <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-sm font-medium text-emerald-700">
             <CheckCircle2 className="size-4" /> Accepted — invoice issued
@@ -179,7 +238,7 @@ export function QuoteCard({
         ) : onAccept ? (
           <Button
             className="w-full bg-forest text-ivory hover:bg-forest-deep"
-            onClick={onAccept}
+            onClick={() => onAccept(useSC)}
             disabled={busy}
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -190,10 +249,16 @@ export function QuoteCard({
             <Lock className="size-3.5" /> Awaiting customer decision
           </div>
         )}
-        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11px] text-forest/45">
-          <Lock className="size-3" />
-          Transport &amp; logistics are included in the ASOJU service fee.
-          Third-party &amp; tax costs are itemized separately.
+        <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[11px] text-forest/45">
+          <span className="flex items-center gap-1.5">
+            <Lock className="size-3" />
+            Transport &amp; logistics included in the ASOJU service fee.
+          </span>
+          {quote.lockedFxRate ? (
+            <span className="flex items-center gap-1.5">
+              ≈ ${usdEquivalent} at ₦{fx}/$ · locked 48h (PRD §4.3)
+            </span>
+          ) : null}
         </p>
       </div>
     </div>

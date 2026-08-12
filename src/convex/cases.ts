@@ -5,9 +5,11 @@ import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   CaseStatus,
+  RegionZone,
   ServiceType,
   casePriorityValidator,
   caseTierValidator,
+  regionZoneValidator,
   serviceTypeValidator,
   timelineValidator,
 } from "./schema";
@@ -26,12 +28,90 @@ const TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
   IN_PROGRESS: ["EVIDENCE_SUBMITTED", "ON_HOLD"],
   EVIDENCE_SUBMITTED: ["QUALITY_CONTROL", "ON_HOLD"],
   QUALITY_CONTROL: ["CUSTOMER_REVIEW", "ADDITIONAL_WORK", "ON_HOLD"],
-  CUSTOMER_REVIEW: ["APPROVED", "ADDITIONAL_WORK"],
+  CUSTOMER_REVIEW: ["APPROVED", "ADDITIONAL_WORK", "DISPUTED"], // PRD §3.1
+  DISPUTED: ["IN_PROGRESS", "ON_HOLD"], // PRD §3.1 — rework after dispute
   ADDITIONAL_WORK: ["IN_PROGRESS", "ON_HOLD"],
   APPROVED: ["COMPLETED"],
   COMPLETED: ["CLOSED"],
   CLOSED: [],
   ON_HOLD: [],
+};
+
+// ---------------------------------------------------------------------------
+// PRD §2 — Commercial model: regions, FX, plans
+// ---------------------------------------------------------------------------
+
+// Demo parallel-market rate (PRD §4.3 shows the locked-rate mechanism).
+// Configurable via FX_RATE_NGN_PER_USD in the deployment env.
+export const FX_RATE_NGN_PER_USD = 1450;
+
+export function fxRate(): number {
+  const env = Number(process.env.FX_RATE_NGN_PER_USD);
+  return Number.isFinite(env) && env > 0 ? env : FX_RATE_NGN_PER_USD;
+}
+
+// PRD §2.2 — deterministic regional matrix. Lagos is the optimised zone;
+// South-West is 1.6x Lagos ($80/$50); Other Locations are TBD by the case
+// manager at scoping — 2.0x is the demo placeholder.
+export const REGION_MULTIPLIER: Record<RegionZone, number> = {
+  LAGOS: 1.0,
+  SOUTH_WEST: 1.6,
+  OTHER: 2.0,
+};
+
+export const REGION_LABEL: Record<RegionZone, string> = {
+  LAGOS: "Lagos zone",
+  SOUTH_WEST: "South-West (excl. Lagos)",
+  OTHER: "Other locations (case-manager scoped)",
+};
+
+export function inferRegion(location?: string, city?: string): RegionZone {
+  const hay = `${city ?? ""} ${location ?? ""}`.toLowerCase();
+  if (
+    hay.includes("lagos") ||
+    hay.includes("lekki") ||
+    hay.includes("ikeja") ||
+    hay.includes("epe")
+  ) {
+    return "LAGOS";
+  }
+  if (
+    ["ibadan", "abeokuta", "osogbo", "akure", "ado-ekiti", "ilorin", "oyo", "ogun", "osun", "ondo", "ekiti", "kwara"].some((s) =>
+      hay.includes(s),
+    )
+  ) {
+    return "SOUTH_WEST";
+  }
+  return "OTHER";
+}
+
+// PRD §2.1 — Subscription plans: monthly fee, monthly Special Credit (SC)
+// voucher, and out-of-pocket discount.
+export const PLAN_META: Record<
+  "ESSENTIAL" | "PRIORITY" | "PREMIUM",
+  { label: string; monthlyUsd: number; scUsd: number; discountPct: number; blurb: string }
+> = {
+  ESSENTIAL: {
+    label: "Essential",
+    monthlyUsd: 0,
+    scUsd: 0,
+    discountPct: 0,
+    blurb: "Pay-per-service. No subscription, no credits.",
+  },
+  PRIORITY: {
+    label: "Priority",
+    monthlyUsd: 49,
+    scUsd: 30,
+    discountPct: 5,
+    blurb: "Monthly SC voucher + 5% off out-of-pocket cases.",
+  },
+  PREMIUM: {
+    label: "Premium",
+    monthlyUsd: 99,
+    scUsd: 50,
+    discountPct: 10,
+    blurb: "Bigger SC voucher + 10% off out-of-pocket cases.",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -277,6 +357,8 @@ export const createServiceRequest = mutation({
     timeline: timelineValidator,
     priority: casePriorityValidator,
     tier: caseTierValidator,
+    // PRD §2.2 — regional quoting zone; inferred from location when omitted.
+    regionZone: v.optional(regionZoneValidator),
     // Optional — set when the request came through the AI Concierge so the
     // handoff is visible in the case thread.
     conciergeSummary: v.optional(v.string()),
@@ -305,6 +387,7 @@ export const createServiceRequest = mutation({
       city: args.city,
       state: args.state,
       priority: args.priority,
+      regionZone: args.regionZone ?? inferRegion(args.location, args.city),
       riskLevel: args.serviceType === "BEREAVEMENT_SUPPORT" ? 4 : args.serviceType === "PROPERTY_INSPECTION" ? 3 : 2,
       tier: args.tier,
       status: "SUBMITTED",
@@ -385,8 +468,16 @@ export function buildQuoteLines(
   serviceType: ServiceType,
   tier: string,
   city?: string,
+  region?: RegionZone,
+  priority?: string,
 ) {
-  const baseFee = SERVICE_META[serviceType].baseFee;
+  // PRD §2.2 — deterministic regional matrix × urgency multiplier.
+  const zone = region ?? "LAGOS";
+  const regionMultiplier = REGION_MULTIPLIER[zone];
+  const urgencyMultiplier = priority === "URGENT" ? 1.5 : 1; // Urgent/24h SLA = 1.5x
+  const baseFee = Math.round(
+    SERVICE_META[serviceType].baseFee * regionMultiplier * urgencyMultiplier,
+  );
   const lines: {
     category: "ASOJU_SERVICE_FEE" | "EXTERNAL_COST" | "THIRD_PARTY_PROFESSIONAL" | "TAX_STATUTORY";
     label: string;
@@ -396,7 +487,7 @@ export function buildQuoteLines(
   // fee — there is deliberately no separate transport line item.
   lines.push({
     category: "ASOJU_SERVICE_FEE",
-    label: `${SERVICE_META[serviceType].label} — service fee (includes representative transport & logistics)`,
+    label: `${SERVICE_META[serviceType].label} — service fee, ${REGION_LABEL[zone]}${urgencyMultiplier > 1 ? " ×1.5 urgent" : ""} (includes representative transport & logistics)`,
     amount: baseFee,
   });
   if (serviceType === "CONSTRUCTION_SUPERVISION") {
@@ -419,10 +510,23 @@ export function buildQuoteLines(
     label: "VAT (7.5%) on ASOJU service fee",
     amount: tax,
   });
-  const discountPercent = tier === "CONCIERGE" ? 15 : 0;
+  // PRD §2.1 — plan discount on out-of-pocket overages: Priority 5% / Premium 10%.
+  const planKey =
+    tier === "PRIORITY" || tier === "PREMIUM" || tier === "ESSENTIAL" ? tier : "ESSENTIAL";
+  const plan = PLAN_META[planKey];
+  const discountPercent = plan.discountPct;
   const discountAmount = Math.round((baseAmount * discountPercent) / 100);
   const amount = baseAmount + nonServiceFeeAmount + tax - discountAmount;
-  return { lines, baseAmount, nonServiceFeeAmount, discountAmount, amount, discountPercent };
+  return {
+    lines,
+    baseAmount,
+    nonServiceFeeAmount,
+    discountAmount,
+    amount,
+    discountPercent,
+    discountLabel:
+      discountPercent > 0 ? `${plan.label} subscription (${discountPercent}% off service fee)` : undefined,
+  };
 }
 
 export const issueQuote = mutation({
@@ -435,8 +539,9 @@ export const issueQuote = mutation({
     // Owners accept; admins/team may issue a quote on any case.
     if (!kase || (kase.userId !== userId && !isAdmin)) throw new Error("Case not found");
 
-    const { lines, baseAmount, nonServiceFeeAmount, discountAmount, amount, discountPercent } =
-      buildQuoteLines(kase.serviceType, kase.tier, kase.city);
+    const zone = kase.regionZone ?? inferRegion(kase.location, kase.city);
+    const { lines, baseAmount, nonServiceFeeAmount, discountAmount, amount, discountPercent, discountLabel } =
+      buildQuoteLines(kase.serviceType, kase.tier, kase.city, zone, kase.priority);
 
     const quoteId = await ctx.db.insert("quotes", {
       caseId: args.caseId,
@@ -446,10 +551,13 @@ export const issueQuote = mutation({
       baseAmount,
       nonServiceFeeAmount,
       discountAmount,
-      discountLabel:
-        discountPercent > 0 ? `Concierge membership (${discountPercent}%)` : undefined,
+      discountLabel,
       lines,
       expiresAt: Date.now() + 7 * 24 * 3600_000, // QUOTE_VALIDITY_HOURS — 7 days
+      // PRD §4.3 — pin the FX rate at quote time; locked for 48 hours.
+      lockedFxRate: fxRate(),
+      sourceCurrency: "USD",
+      fxLockExpiry: Date.now() + 48 * 3600_000,
       createdAt: Date.now(),
     });
 
@@ -467,7 +575,7 @@ export const issueQuote = mutation({
 });
 
 export const acceptQuote = mutation({
-  args: { caseId: v.id("cases") },
+  args: { caseId: v.id("cases"), useSC: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const userId = await getAuthUser(ctx);
     const kase = await ctx.db.get(args.caseId);
@@ -478,18 +586,131 @@ export const acceptQuote = mutation({
     if (quote.expiresAt < Date.now()) throw new Error("This quote has expired");
     if (quote.acceptedAt) throw new Error("Quote already accepted");
 
-    await ctx.db.patch(kase.quoteId, { acceptedAt: Date.now() });
+    // PRD §2.1 / §2.3 — Special Credit (SC) single-use voucher.
+    let scAmount = 0;
+    let scForfeited = false;
+    if (args.useSC) {
+      const sub = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .filter((q) => q.eq(q.field("status"), "active"))
+        .first();
+      if (!sub) throw new Error("No active subscription — subscribe in Billing to use your Special Credit");
+      if (sub.scUsedThisCycle) throw new Error("Your Special Credit was already used this billing cycle");
+      const zone = kase.regionZone ?? inferRegion(kase.location, kase.city);
+      if (zone === "OTHER") {
+        throw new Error("Special Credit cannot be applied outside Lagos & the South-West (PRD §2.3)");
+      }
+      const fx = quote.lockedFxRate ?? fxRate();
+      const scNaira = Math.round(sub.scUsd * fx);
+      scAmount = Math.min(scNaira, quote.amount);
+      scForfeited = scNaira > quote.amount; // case < SC → remainder forfeited this cycle
+      await ctx.db.patch(sub._id, {
+        scUsedThisCycle: true,
+        scUsedOnCaseId: args.caseId,
+      });
+    }
+
+    await ctx.db.patch(kase.quoteId, {
+      acceptedAt: Date.now(),
+      scApplied: args.useSC === true,
+      scAmount: scAmount > 0 ? scAmount : undefined,
+    });
+    const invoiceAmount = quote.amount - scAmount;
     const invoiceId = await ctx.db.insert("invoices", {
       caseId: args.caseId,
       userId,
       quoteId: kase.quoteId,
-      amount: quote.amount,
+      amount: invoiceAmount,
       currency: "NGN",
       createdAt: Date.now(),
     });
     await ctx.db.patch(args.caseId, { invoiceId, updatedAt: Date.now() });
-    await transitionCase(ctx, args.caseId, "AWAITING_PAYMENT", "Customer accepted the quote", "You");
-    return { invoiceId };
+    await transitionCase(
+      ctx,
+      args.caseId,
+      "AWAITING_PAYMENT",
+      args.useSC && scAmount > 0
+        ? `Customer accepted the quote — SC ₦${scAmount.toLocaleString()} applied${scForfeited ? " (remaining balance forfeited)" : ""}`
+        : "Customer accepted the quote",
+      "You",
+    );
+    return { invoiceId, invoiceAmount, scAmount };
+  },
+});
+
+/** PRD §3.1 — formal dispute: locks the report, records structured gaps, and
+ *  moves the case to DISPUTED for a rework. */
+export const raiseDispute = mutation({
+  args: {
+    caseId: v.id("cases"),
+    reasons: v.array(v.string()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUser(ctx);
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase || kase.userId !== userId) throw new Error("Case not found");
+    if (kase.status !== "CUSTOMER_REVIEW") {
+      throw new Error("Disputes can only be raised once a report is ready for your review");
+    }
+    if (args.reasons.length === 0) throw new Error("Select at least one disputed item");
+    await ctx.db.insert("disputes", {
+      caseId: args.caseId,
+      userId,
+      reasons: args.reasons,
+      notes: args.notes,
+      status: "OPEN",
+      createdAt: Date.now(),
+    });
+    await transitionCase(
+      ctx,
+      args.caseId,
+      "DISPUTED",
+      `Customer disputed the report: ${args.reasons.join(", ")}`,
+      "You",
+    );
+    await notify(
+      ctx,
+      userId,
+      "Dispute filed",
+      "The report has been locked and a rework on the disputed items has been scheduled.",
+      args.caseId,
+    );
+    return { ok: true };
+  },
+});
+
+/** PRD §3.1 — team-side resolution: accepts the dispute and schedules rework. */
+export const resolveDispute = mutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUser(ctx);
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin access required");
+    const kase = await ctx.db.get(args.caseId);
+    if (!kase || kase.status !== "DISPUTED") throw new Error("Case is not disputed");
+    const dispute = await ctx.db
+      .query("disputes")
+      .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
+      .filter((q) => q.eq(q.field("status"), "OPEN"))
+      .first();
+    if (dispute) {
+      await ctx.db.patch(dispute._id, {
+        status: "RESOLVED",
+        resolvedAt: Date.now(),
+        resolvedBy: user.name ?? "ASOJU Team",
+      });
+    }
+    await transitionCase(ctx, args.caseId, "IN_PROGRESS", "Dispute accepted — rework scheduled on disputed items", "ASOJU Team");
+    await notify(
+      ctx,
+      kase.userId,
+      "Dispute accepted — rework underway",
+      "We've accepted your dispute and scheduled rework on the disputed items.",
+      args.caseId,
+    );
+    return { ok: true };
   },
 });
 
@@ -775,6 +996,23 @@ async function runTeamDemoStep(
     case "COMPLETED":
       await transitionCase(ctx, caseId, "CLOSED", "Case closed", "ASOJU Team");
       break;
+    case "DISPUTED": {
+      // PRD §3.1 — team accepts the dispute and schedules rework.
+      const dispute = await ctx.db
+        .query("disputes")
+        .withIndex("by_case", (q) => q.eq("caseId", caseId))
+        .filter((q) => q.eq(q.field("status"), "OPEN"))
+        .first();
+      if (dispute) {
+        await ctx.db.patch(dispute._id, {
+          status: "RESOLVED",
+          resolvedAt: now,
+          resolvedBy: "ASOJU Team",
+        });
+      }
+      await transitionCase(ctx, caseId, "IN_PROGRESS", "Dispute accepted — rework scheduled on disputed items", "ASOJU Team");
+      break;
+    }
     default:
       throw new Error("No demo team action available for this state");
   }

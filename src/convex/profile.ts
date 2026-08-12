@@ -8,7 +8,7 @@ import {
   reportForService,
   SERVICE_META,
 } from "./cases";
-import { ServiceType } from "./schema";
+import { RegionZone, ServiceType } from "./schema";
 
 // ---------------------------------------------------------------------------
 // Onboarding — progressive disclosure (PRD 5.1) + demo portfolio seed
@@ -101,12 +101,13 @@ async function seedDemoPortfolio(ctx: any, userId: string, now: number) {
     priority: "PRIORITY",
     riskLevel: 3,
     tier: "ESSENTIAL",
+    region: "LAGOS",
     status: "QUOTED",
     nextAction: "Customer to review the quote",
     nextActionDueAt: now + 7 * 24 * 3600_000,
     ageDays: 2,
   });
-  const quote1 = buildQuoteLines("PROPERTY_INSPECTION", "ESSENTIAL", "Ibeju-Lekki");
+  const quote1 = buildQuoteLines("PROPERTY_INSPECTION", "ESSENTIAL", "Ibeju-Lekki", "LAGOS");
   const quoteId1 = await ctx.db.insert("quotes", {
     caseId: case1,
     userId,
@@ -136,7 +137,8 @@ async function seedDemoPortfolio(ctx: any, userId: string, now: number) {
     state: "Lagos",
     priority: "URGENT",
     riskLevel: 2,
-    tier: "CONCIERGE",
+    tier: "PREMIUM",
+    region: "LAGOS",
     status: "IN_PROGRESS",
     assignedAgentName: "Kelechi Okafor",
     scheduledFor: now + 1 * 24 * 3600_000,
@@ -174,13 +176,14 @@ async function seedDemoPortfolio(ctx: any, userId: string, now: number) {
     priority: "STANDARD",
     riskLevel: 2,
     tier: "ESSENTIAL",
+    region: "SOUTH_WEST",
     status: "COMPLETED",
     assignedAgentName: "Bisi Adeyemi",
     paymentStatus: "PAID",
     nextAction: "None — case complete",
     ageDays: 22,
   });
-  const quote3 = buildQuoteLines("ASSET_INSPECTION", "ESSENTIAL", "Oyo");
+  const quote3 = buildQuoteLines("ASSET_INSPECTION", "ESSENTIAL", "Oyo", "SOUTH_WEST");
   const quoteId3 = await ctx.db.insert("quotes", {
     caseId: case3,
     userId,
@@ -312,12 +315,13 @@ async function seedFakeCustomers(ctx: any, now: number) {
     priority: "PRIORITY",
     riskLevel: 3,
     tier: "ESSENTIAL",
+    region: "LAGOS",
     status: "AWAITING_PAYMENT",
     nextAction: "Customer to complete payment",
     nextActionDueAt: now + 2 * 24 * 3600_000,
     ageDays: 1,
   });
-  const ezeQuote = buildQuoteLines("PROPERTY_INSPECTION", "ESSENTIAL", "Lekki");
+  const ezeQuote = buildQuoteLines("PROPERTY_INSPECTION", "ESSENTIAL", "Lekki", "LAGOS");
   const ezeQuoteId = await ctx.db.insert("quotes", {
     caseId: eze1,
     userId: ezeId,
@@ -355,13 +359,14 @@ async function seedFakeCustomers(ctx: any, now: number) {
     priority: "STANDARD",
     riskLevel: 1,
     tier: "ESSENTIAL",
+    region: "OTHER",
     status: "COMPLETED",
     paymentStatus: "PAID",
     assignedAgentName: "Musa Abdullahi",
     nextAction: "None — case complete",
     ageDays: 18,
   });
-  const ezeQuote2 = buildQuoteLines("PROCUREMENT", "ESSENTIAL", "Enugu");
+  const ezeQuote2 = buildQuoteLines("PROCUREMENT", "ESSENTIAL", "Enugu", "OTHER");
   const ezeQuote2Id = await ctx.db.insert("quotes", {
     caseId: eze2,
     userId: ezeId,
@@ -445,7 +450,8 @@ async function seedFakeCustomers(ctx: any, now: number) {
     state: "FCT",
     priority: "URGENT",
     riskLevel: 2,
-    tier: "CONCIERGE",
+    tier: "PREMIUM",
+    region: "OTHER",
     status: "IN_PROGRESS",
     assignedAgentName: "Musa Abdullahi",
     scheduledFor: now - 4 * 3600_000,
@@ -495,12 +501,13 @@ async function seedFakeCustomers(ctx: any, now: number) {
     priority: "STANDARD",
     riskLevel: 2,
     tier: "ESSENTIAL",
+    region: "LAGOS",
     status: "QUOTED",
     nextAction: "Customer to review the quote",
     nextActionDueAt: now + 6 * 24 * 3600_000,
     ageDays: 0,
   });
-  const funkeQuote = buildQuoteLines("ASSET_INSPECTION", "ESSENTIAL", "Apapa");
+  const funkeQuote = buildQuoteLines("ASSET_INSPECTION", "ESSENTIAL", "Apapa", "LAGOS");
   const funkeQuoteId = await ctx.db.insert("quotes", {
     caseId: funke1,
     userId: funkeId,
@@ -532,7 +539,8 @@ async function insertSeededCase(
     state: string;
     priority: "STANDARD" | "PRIORITY" | "URGENT";
     riskLevel: number;
-    tier: "ESSENTIAL" | "CONCIERGE";
+    tier: "ESSENTIAL" | "PRIORITY" | "PREMIUM";
+    region?: RegionZone;
     status: string;
     assignedAgentName?: string;
     scheduledFor?: number;
@@ -555,6 +563,7 @@ async function insertSeededCase(
     priority: data.priority,
     riskLevel: data.riskLevel,
     tier: data.tier,
+    regionZone: data.region ?? "LAGOS",
     status: data.status,
     paymentStatus: data.paymentStatus ?? "PENDING",
     assignedAgentName: data.assignedAgentName,

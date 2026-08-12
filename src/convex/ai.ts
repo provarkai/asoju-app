@@ -6,7 +6,7 @@ import { createVlyIntegrations } from "@vly-ai/integrations";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
-import { buildQuoteLines, SERVICE_META } from "./cases";
+import { buildQuoteLines, fxRate, inferRegion, SERVICE_META } from "./cases";
 import {
   CasePriority,
   CaseTier,
@@ -51,8 +51,8 @@ Required scope fields to capture before quoting:
 - location: full location string, e.g. "Ibeju-Lekki, Lagos"
 - city and state: prefer to extract these from the location if mentioned
 - timeline: "immediate" | "near_term" | "exploring"
-- priority: "STANDARD" | "PRIORITY" | "URGENT" (URGENT only if the customer signals real urgency)
-- tier: "ESSENTIAL" | "CONCIERGE" (recommend ESSENTIAL for a one-off; only use CONCIERGE if they ask about membership or subscriptions)
+- priority: "STANDARD" | "PRIORITY" | "URGENT" (URGENT only if the customer signals real urgency — it applies a 1.5x multiplier to the service fee)
+- tier: "ESSENTIAL" | "PRIORITY" | "PREMIUM" (recommend ESSENTIAL for a one-off; only use PRIORITY or PREMIUM if they ask about subscriptions, memberships, monthly credits, or discounts)
 
 Conversation rules:
 - Warm, concise, professional. Keep replies short (1-4 sentences). Address the customer directly.
@@ -105,7 +105,7 @@ function isValidScope(raw: Record<string, unknown>): raw is CapturedScope {
   if (typeof raw.location !== "string" || raw.location.trim().length < 2) return false;
   if (!["immediate", "near_term", "exploring"].includes(raw.timeline as string)) return false;
   if (!["STANDARD", "PRIORITY", "URGENT"].includes(raw.priority as string)) return false;
-  if (!["ESSENTIAL", "CONCIERGE"].includes(raw.tier as string)) return false;
+  if (!["ESSENTIAL", "PRIORITY", "PREMIUM"].includes(raw.tier as string)) return false;
   return true;
 }
 
@@ -240,7 +240,11 @@ type ChatReply =
         nonServiceFeeAmount: number;
         discountAmount: number;
         discountPercent: number;
+        discountLabel?: string;
         amount: number;
+        regionZone: string;
+        fxRate: number;
+        fxLockExpiry: number;
       };
     };
 
@@ -285,7 +289,14 @@ export const conciergeChat = action({
     } satisfies CapturedScope;
 
     // Prices are computed by the engine — never by the model.
-    const quote = buildQuoteLines(captured.serviceType, captured.tier, captured.city);
+    const regionZone = inferRegion(captured.location, captured.city);
+    const quote = buildQuoteLines(
+      captured.serviceType,
+      captured.tier,
+      captured.city,
+      regionZone,
+      captured.priority,
+    );
     return {
       reply,
       ready: true,
@@ -297,7 +308,11 @@ export const conciergeChat = action({
         nonServiceFeeAmount: quote.nonServiceFeeAmount,
         discountAmount: quote.discountAmount,
         discountPercent: quote.discountPercent,
+        discountLabel: quote.discountLabel,
         amount: quote.amount,
+        regionZone,
+        fxRate: fxRate(),
+        fxLockExpiry: Date.now() + 48 * 3600_000,
       },
     };
   },
@@ -324,6 +339,7 @@ export const conciergeCreateCase = action({
       timeline: c.timeline,
       priority: c.priority,
       tier: c.tier,
+      regionZone: inferRegion(c.location, c.city),
       conciergeSummary: `Scope captured by the AI Concierge: ${c.description} (${c.location}).`,
     });
 

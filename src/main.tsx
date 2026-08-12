@@ -172,6 +172,22 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              <Route
+                path="/dashboard/billing"
+                element={
+                  <RequireAuth>
+                    <Portal />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/dashboard/vault"
+                element={
+                  <RequireAuth>
+                    <Portal />
+                  </RequireAuth>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

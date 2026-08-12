@@ -483,7 +483,7 @@ export default function Landing() {
             </p>
           </motion.div>
 
-          <div className="mx-auto mt-14 grid max-w-4xl gap-6 md:grid-cols-2">
+          <div className="mx-auto mt-14 grid max-w-6xl gap-6 md:grid-cols-3">
             <motion.div
               initial="hidden"
               whileInView="show"
@@ -500,11 +500,14 @@ export default function Landing() {
                   <p className="text-xs text-forest/50">Pay-per-service</p>
                 </div>
               </div>
+              <p className="mt-4 font-display text-3xl font-semibold text-forest">
+                ₦0<span className="text-sm font-normal text-forest/50"> /mo</span>
+              </p>
               <ul className="mt-6 space-y-3 text-sm text-forest/70">
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> AI Concierge intake &amp; case tracking</li>
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Verified representative on site</li>
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Photo/video evidence + QC report</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> No subscription required</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Region-based quotes, rate locked 48h</li>
               </ul>
               <Button
                 className="mt-8 w-full bg-forest text-ivory hover:bg-forest-deep"
@@ -520,6 +523,41 @@ export default function Landing() {
               viewport={{ once: true }}
               variants={fadeUp}
               custom={1}
+              className="relative overflow-hidden rounded-3xl border border-gold/40 bg-white p-8 shadow-xl shadow-gold/10"
+            >
+              <Badge className="absolute right-6 top-6 border-gold/40 bg-gold/10 text-clay">Popular</Badge>
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-gold/15 text-clay">
+                  <Sparkles className="size-5" />
+                </span>
+                <div>
+                  <h3 className="font-display text-xl font-semibold text-forest">Priority</h3>
+                  <p className="text-xs text-forest/50">Subscription + SC voucher</p>
+                </div>
+              </div>
+              <p className="mt-4 font-display text-3xl font-semibold text-forest">
+                $49<span className="text-sm font-normal text-forest/50"> /mo</span>
+              </p>
+              <ul className="mt-6 space-y-3 text-sm text-forest/70">
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Everything in Essential</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $30 Special Credit (SC) every month</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 5% off out-of-pocket overages</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Priority scheduling &amp; dedicated queue</li>
+              </ul>
+              <Button
+                className="mt-8 w-full border-gold/40 bg-clay text-ivory hover:bg-clay-deep"
+                onClick={() => go(isAuthenticated ? "/dashboard/billing" : "/auth?returnTo=/dashboard/billing")}
+              >
+                Subscribe to Priority
+              </Button>
+            </motion.div>
+
+            <motion.div
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              custom={2}
               className="relative overflow-hidden rounded-3xl bg-forest p-8 text-ivory shadow-2xl shadow-forest/30"
             >
               <div className="absolute inset-0 pattern-grid-dark" />
@@ -529,29 +567,35 @@ export default function Landing() {
                     <Sparkles className="size-5" />
                   </span>
                   <div>
-                    <h3 className="font-display text-xl font-semibold">Concierge</h3>
+                    <h3 className="font-display text-xl font-semibold">Premium</h3>
                     <p className="text-xs text-ivory/60">Subscription, relationship-managed</p>
                   </div>
-                  <Badge className="ml-auto border-gold/40 bg-gold/15 text-gold-light">
-                    Coming soon
-                  </Badge>
                 </div>
+                <p className="mt-4 font-display text-3xl font-semibold">
+                  $99<span className="text-sm font-normal text-ivory/60"> /mo</span>
+                </p>
                 <ul className="mt-6 space-y-3 text-sm text-ivory/75">
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Everything in Essential</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Dedicated relationship manager</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Recurring site-visit schedules</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> 15% off service fees + service credits</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Everything in Priority</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> $50 Special Credit (SC) every month</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> 10% off out-of-pocket overages</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Gold-agent assignment + recurring visits</li>
                 </ul>
                 <Button
                   variant="outline"
                   className="mt-8 w-full border-gold/40 bg-transparent text-gold-light hover:bg-gold/10 hover:text-gold-light"
-                  onClick={() => go("/auth")}
+                  onClick={() => go(isAuthenticated ? "/dashboard/billing" : "/auth?returnTo=/dashboard/billing")}
                 >
-                  Join the waitlist
+                  Subscribe to Premium
                 </Button>
               </div>
             </motion.div>
           </div>
+          <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-forest/50">
+            SC vouchers are single-use per billing cycle — any unused balance is forfeited. Apply your SC at
+            checkout on Lagos &amp; South-West cases; remote “Other Location” cases carry full regional pricing
+            (Lagos ₦ / South-West / remote by case-manager scoping). Quotes lock today's parallel-market rate
+            for 48 hours.
+          </p>
         </div>
       </section>
 

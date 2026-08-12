@@ -39,7 +39,11 @@ export type QuoteData = {
   nonServiceFeeAmount: number;
   discountAmount: number;
   discountPercent: number;
+  discountLabel?: string;
   amount: number;
+  regionZone?: string;
+  fxRate?: number;
+  fxLockExpiry?: number;
 };
 
 type UiMsg =
@@ -367,7 +371,7 @@ function QuoteCard({
           ))}
           {quote.discountAmount > 0 && (
             <li className="flex items-baseline justify-between gap-3 text-[13px] text-forest/60">
-              <span>Concierge discount ({quote.discountPercent}%)</span>
+              <span>{quote.discountLabel ?? `Plan discount (${quote.discountPercent}%)`}</span>
               <span className="shrink-0 font-medium text-forest">
                 −{naira(quote.discountAmount)}
               </span>
@@ -386,6 +390,9 @@ function QuoteCard({
           <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-forest" />
           All-in service fee — representative transport &amp; logistics
           included. VAT and third-party costs itemized. Valid 7 days.
+          {quote.fxRate
+            ? ` · ≈ $${Math.round(quote.amount / quote.fxRate)} at ₦${quote.fxRate}/$ — rate locked 48h.`
+            : ""}
         </p>
 
         <div className="px-4 pb-3.5">
@@ -416,6 +423,11 @@ function QuoteCard({
 
         <p className="border-t border-forest/8 bg-ivory/40 px-4 py-2 text-[11px] text-forest/50">
           📍 {captured.location} · {quote.serviceLabel}
+          {quote.regionZone === "OTHER"
+            ? " · Special Credit not available in this region"
+            : quote.regionZone
+              ? ` · ${quote.regionZone === "LAGOS" ? "Lagos zone" : "South-West zone"} — SC eligible`
+              : ""}
         </p>
       </div>
     </motion.div>

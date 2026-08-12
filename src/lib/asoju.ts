@@ -182,3 +182,89 @@ export const LEAD_TAG_META: Record<string, { label: string; tone: string }> = {
   WARM: { label: "Warm", tone: "bg-amber-100 text-amber-700" },
   COLD: { label: "Cold", tone: "bg-slate-200 text-slate-600" },
 };
+
+// ---------------------------------------------------------------------------
+// PRD §2 — Commercial model (display mirrors of the Convex PLAN_META)
+// ---------------------------------------------------------------------------
+
+export type PlanKey = "ESSENTIAL" | "PRIORITY" | "PREMIUM";
+
+export const PLAN_META: Record<
+  PlanKey,
+  { label: string; monthlyUsd: number; scUsd: number; discountPct: number; blurb: string }
+> = {
+  ESSENTIAL: {
+    label: "Essential",
+    monthlyUsd: 0,
+    scUsd: 0,
+    discountPct: 0,
+    blurb: "Pay-per-service. No subscription, no credits.",
+  },
+  PRIORITY: {
+    label: "Priority",
+    monthlyUsd: 49,
+    scUsd: 30,
+    discountPct: 5,
+    blurb: "Monthly SC voucher + 5% off out-of-pocket cases.",
+  },
+  PREMIUM: {
+    label: "Premium",
+    monthlyUsd: 99,
+    scUsd: 50,
+    discountPct: 10,
+    blurb: "Bigger SC voucher + 10% off out-of-pocket cases.",
+  },
+};
+
+export const PLAN_LABEL: Record<string, string> = {
+  ESSENTIAL: "Essential",
+  PRIORITY: "Priority",
+  PREMIUM: "Premium",
+};
+
+export type RegionZoneKey = "LAGOS" | "SOUTH_WEST" | "OTHER";
+
+export const REGION_META: Record<
+  RegionZoneKey,
+  { label: string; hint: string; multiplier: number; scEligible: boolean }
+> = {
+  LAGOS: { label: "Lagos zone", hint: "Optimised cost base — SC eligible", multiplier: 1.0, scEligible: true },
+  SOUTH_WEST: { label: "South-West (excl. Lagos)", hint: "Oyo · Ogun · Osun · Ondo · Ekiti · Kwara — SC eligible", multiplier: 1.6, scEligible: true },
+  OTHER: { label: "Other locations", hint: "Scoped by case manager — SC not available", multiplier: 2.0, scEligible: false },
+};
+
+export const REGION_LABEL: Record<string, string> = {
+  LAGOS: "Lagos zone",
+  SOUTH_WEST: "South-West (excl. Lagos)",
+  OTHER: "Other locations",
+};
+
+// Demo parallel-market rate pinned at quote time (PRD §4.3).
+export const FX_RATE_NGN_PER_USD = 1450;
+
+export const VAULT_CATEGORY_LABEL: Record<string, string> = {
+  TITLE_DEED: "Title deed",
+  CAC_CERT: "CAC certificate",
+  POWER_OF_ATTORNEY: "Power of attorney",
+  IDENTITY: "Identity document",
+  OTHER: "Other",
+};
+
+// PRD §3.3 — construction milestone tracker (groups the flat checklist).
+export const CONSTRUCTION_MILESTONES: { key: string; label: string; items: string[] }[] = [
+  {
+    key: "FOUNDATION",
+    label: "Foundation & ground works",
+    items: ["Scheduled site visit", "Photograph current build stage"],
+  },
+  {
+    key: "STRUCTURE",
+    label: "Structure & blockwork",
+    items: ["Verify materials on site", "Record contractor observations"],
+  },
+  {
+    key: "ROOF_FINISH",
+    label: "Roofing & finishing",
+    items: ["Capture site video", "Note progress vs. schedule", "Identify exceptions"],
+  },
+];

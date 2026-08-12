@@ -29,7 +29,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatDate, formatDateTime, naira } from "@/lib/asoju";
+import { formatDate, formatDateTime, naira, PLAN_LABEL } from "@/lib/asoju";
 
 export function TeamCaseView({ caseId }: { caseId: string }) {
   const navigate = useNavigate();
@@ -232,7 +232,7 @@ export function TeamCaseView({ caseId }: { caseId: string }) {
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
                 ["Priority", kase.priority],
-                ["Tier", kase.tier === "CONCIERGE" ? "Concierge" : "Essential"],
+                ["Plan", PLAN_LABEL[kase.tier] ?? kase.tier],
                 ["Risk level", `${kase.riskLevel}/4`],
                 ["Payment", kase.paymentStatus],
               ].map(([l, val]) => (

@@ -2,12 +2,14 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Bell,
+  CreditCard,
   FilePlus2,
   LayoutDashboard,
   LogOut,
   Menu,
   UserRound,
   UsersRound,
+  Vault,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -21,10 +23,14 @@ import { CaseDetailView } from "./portal/CaseDetailView";
 import { ProfileView } from "./portal/ProfileView";
 import { TeamView } from "./portal/TeamView";
 import { TeamCaseView } from "./portal/TeamCaseView";
+import { BillingView } from "./portal/BillingView";
+import { VaultView } from "./portal/VaultView";
 
 const NAV = [
   { key: "home", label: "My cases", path: "/dashboard", icon: LayoutDashboard },
   { key: "new", label: "New request", path: "/dashboard/new", icon: FilePlus2 },
+  { key: "billing", label: "Billing & SC", path: "/dashboard/billing", icon: CreditCard },
+  { key: "vault", label: "My Nigeria Vault", path: "/dashboard/vault", icon: Vault },
   { key: "profile", label: "Profile", path: "/dashboard/profile", icon: UserRound },
   { key: "team", label: "Team", path: "/dashboard/team", icon: UsersRound, adminOnly: true },
 ];
@@ -61,11 +67,15 @@ export default function Portal() {
       ? "case"
       : pathname === "/dashboard/new"
         ? "new"
-        : pathname === "/dashboard/profile"
-          ? "profile"
-          : pathname.startsWith("/dashboard/team")
-            ? "team"
-            : "home";
+        : pathname === "/dashboard/billing"
+          ? "billing"
+          : pathname === "/dashboard/vault"
+            ? "vault"
+            : pathname === "/dashboard/profile"
+              ? "profile"
+              : pathname.startsWith("/dashboard/team")
+                ? "team"
+                : "home";
 
   const handleSignOut = async () => {
     await signOut();
@@ -233,6 +243,10 @@ export default function Portal() {
             <TeamView />
           ) : activeKey === "new" ? (
             <NewRequestView />
+          ) : activeKey === "billing" ? (
+            <BillingView />
+          ) : activeKey === "vault" ? (
+            <VaultView />
           ) : activeKey === "profile" ? (
             <ProfileView />
           ) : (

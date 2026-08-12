@@ -57,7 +57,7 @@ const PRIORITIES: { key: CasePriority; label: string; hint: string }[] = [
   { key: "URGENT", label: "Urgent", hint: "24h SLA" },
 ];
 
-const TIERS: { key: CaseTier; label: string; desc: string; icon: typeof ClipboardCheck }[] = [
+const PLANS: { key: CaseTier; label: string; desc: string; icon: typeof ClipboardCheck; badge?: string }[] = [
   {
     key: "ESSENTIAL",
     label: "Essential",
@@ -65,11 +65,24 @@ const TIERS: { key: CaseTier; label: string; desc: string; icon: typeof Clipboar
     icon: ClipboardCheck,
   },
   {
-    key: "CONCIERGE",
-    label: "Concierge",
-    desc: "Subscription-tier pricing with relationship management. 15% off service fees.",
+    key: "PRIORITY",
+    label: "Priority · $49/mo",
+    desc: "$30 Special Credit monthly + 5% off out-of-pocket cases.",
     icon: Sparkles,
   },
+  {
+    key: "PREMIUM",
+    label: "Premium · $99/mo",
+    desc: "$50 Special Credit monthly + 10% off out-of-pocket cases.",
+    icon: Sparkles,
+    badge: "Best value",
+  },
+];
+
+const REGIONS: { key: "LAGOS" | "SOUTH_WEST" | "OTHER"; label: string; hint: string }[] = [
+  { key: "LAGOS", label: "Lagos zone", hint: "Optimised cost base" },
+  { key: "SOUTH_WEST", label: "South-West (excl. Lagos)", hint: "Oyo · Ogun · Osun · Ondo · Ekiti · Kwara" },
+  { key: "OTHER", label: "Other locations", hint: "Case-manager scoped · no Special Credit" },
 ];
 
 export function NewRequestView() {
@@ -85,6 +98,7 @@ export function NewRequestView() {
   const [timeline, setTimeline] = useState<Timeline>("near_term");
   const [priority, setPriority] = useState<CasePriority>("STANDARD");
   const [tier, setTier] = useState<CaseTier>("ESSENTIAL");
+  const [region, setRegion] = useState<"LAGOS" | "SOUTH_WEST" | "OTHER">("LAGOS");
   const [submitting, setSubmitting] = useState(false);
 
   // Pre-fill from a Concierge chat draft (carried via sessionStorage when the
@@ -108,8 +122,11 @@ export function NewRequestView() {
       if (typeof d.priority === "string" && PRIORITIES.some((p) => p.key === d.priority)) {
         setPriority(d.priority as CasePriority);
       }
-      if (typeof d.tier === "string" && TIERS.some((t) => t.key === d.tier)) {
+      if (typeof d.tier === "string" && PLANS.some((t) => t.key === d.tier)) {
         setTier(d.tier as CaseTier);
+      }
+      if (typeof d.regionZone === "string" && REGIONS.some((r) => r.key === d.regionZone)) {
+        setRegion(d.regionZone as "LAGOS" | "SOUTH_WEST" | "OTHER");
       }
       toast.info("Pre-filled from your Concierge chat — review and submit.");
     } catch {
@@ -137,6 +154,7 @@ export function NewRequestView() {
         timeline,
         priority,
         tier,
+        regionZone: region,
       });
       toast.success(`Request received — ${res.caseNumber} created`);
       navigate(`/dashboard/cases/${res.caseId}`);
@@ -236,6 +254,31 @@ export function NewRequestView() {
         {/* STEP 2 — details */}
         {step === 1 && (
           <div className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-forest">
+                Which region is the property in?
+              </label>
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {REGIONS.map((r) => (
+                  <button
+                    key={r.key}
+                    type="button"
+                    onClick={() => setRegion(r.key)}
+                    className={cn(
+                      "rounded-xl border p-3.5 text-left transition-all",
+                      region === r.key
+                        ? "border-forest bg-forest text-ivory shadow-md"
+                        : "border-forest/10 bg-white hover:border-forest/30",
+                    )}
+                  >
+                    <p className="text-sm font-semibold">{r.label}</p>
+                    <p className={cn("mt-0.5 text-[11px]", region === r.key ? "opacity-70" : "text-forest/50")}>
+                      {r.hint}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-forest">
                 What's happening? Describe it in your own words
@@ -352,20 +395,33 @@ export function NewRequestView() {
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-forest">
-                Which plan is right for this request?
+                Which plan applies to this request?
               </label>
               <div className="grid gap-2.5 sm:grid-cols-2">
-                {TIERS.map((t) => (
+                {PLANS.map((t) => (
                   <button
                     key={t.key}
+                    type="button"
                     onClick={() => setTier(t.key)}
                     className={cn(
-                      "flex gap-3 rounded-xl border p-4 text-left transition-all",
+                      "relative flex gap-3 rounded-xl border p-4 text-left transition-all",
                       tier === t.key
                         ? "border-forest bg-forest text-ivory shadow-md"
                         : "border-forest/10 bg-white hover:border-forest/30",
                     )}
                   >
+                    {t.badge && (
+                      <Badge
+                        className={cn(
+                          "absolute right-3 top-3 border text-[10px]",
+                          tier === t.key
+                            ? "border-gold/40 bg-gold/15 text-gold-light"
+                            : "border-gold/40 bg-gold/10 text-clay",
+                        )}
+                      >
+                        {t.badge}
+                      </Badge>
+                    )}
                     <t.icon className={cn("mt-0.5 size-5 shrink-0", tier === t.key ? "text-gold-light" : "text-forest")} />
                     <div>
                       <p className="text-sm font-semibold">{t.label}</p>
@@ -376,6 +432,11 @@ export function NewRequestView() {
                   </button>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] text-forest/45">
+                SC vouchers and discounts require an active subscription — manage
+                them in Billing. Subscriptions are monthly; unused SC never rolls
+                over.
+              </p>
             </div>
           </div>
         )}
