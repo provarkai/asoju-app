@@ -187,36 +187,44 @@ export const LEAD_TAG_META: Record<string, { label: string; tone: string }> = {
 // PRD §2 — Commercial model (display mirrors of the Convex PLAN_META)
 // ---------------------------------------------------------------------------
 
-export type PlanKey = "ESSENTIAL" | "PRIORITY" | "PREMIUM";
+export type PlanKey = "PAY_AS_YOU_GO" | "ESSENTIAL" | "PRIORITY" | "PREMIUM";
 
 export const PLAN_META: Record<
   PlanKey,
   { label: string; monthlyUsd: number; scUsd: number; discountPct: number; blurb: string }
 > = {
-  ESSENTIAL: {
-    label: "Essential",
+  PAY_AS_YOU_GO: {
+    label: "Pay As You Go",
     monthlyUsd: 0,
     scUsd: 0,
     discountPct: 0,
     blurb: "Pay-per-service. No subscription, no credits.",
   },
-  PRIORITY: {
-    label: "Priority",
+  ESSENTIAL: {
+    label: "Essential",
     monthlyUsd: 49,
     scUsd: 30,
     discountPct: 5,
-    blurb: "Monthly SC voucher + 5% off out-of-pocket cases.",
+    blurb: "Monthly $30 SC voucher + 5% off out-of-pocket cases.",
   },
-  PREMIUM: {
-    label: "Premium",
+  PRIORITY: {
+    label: "Priority",
     monthlyUsd: 99,
     scUsd: 50,
     discountPct: 10,
-    blurb: "Bigger SC voucher + 10% off out-of-pocket cases.",
+    blurb: "Monthly $50 SC voucher + 10% off out-of-pocket cases.",
+  },
+  PREMIUM: {
+    label: "Premium",
+    monthlyUsd: 199,
+    scUsd: 100,
+    discountPct: 15,
+    blurb: "$100 SC voucher monthly + 15% off out-of-pocket cases.",
   },
 };
 
 export const PLAN_LABEL: Record<string, string> = {
+  PAY_AS_YOU_GO: "Pay As You Go",
   ESSENTIAL: "Essential",
   PRIORITY: "Priority",
   PREMIUM: "Premium",

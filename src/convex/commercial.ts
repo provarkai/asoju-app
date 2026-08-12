@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { PLAN_META } from "./cases";
 import { subscriptionPlanValidator, vaultCategoryValidator } from "./schema";
 
@@ -90,6 +90,9 @@ export const addVaultDocument = mutation({
     name: v.string(),
     category: vaultCategoryValidator,
     notes: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    fileName: v.optional(v.string()),
+    fileSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -99,9 +102,37 @@ export const addVaultDocument = mutation({
       name: args.name,
       category: args.category,
       notes: args.notes,
+      storageId: args.storageId,
+      fileName: args.fileName,
+      fileSize: args.fileSize,
       isVerified: false,
       createdAt: Date.now(),
     });
+    return { ok: true };
+  },
+});
+
+/** Upload step 1 — get a short-lived upload URL for the client to POST the
+ *  file to (Convex file storage). The client then calls addVaultDocument with
+ *  the returned storageId. */
+export const generateVaultUploadUrl = action({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.storage.generateUploadUrl();
+  },
+});
+
+export const deleteVaultDocument = mutation({
+  args: { documentId: v.id("vaultDocuments") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("Not authenticated");
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc || doc.userId !== userId) throw new Error("Document not found");
+    if (doc.storageId) {
+      await ctx.storage.delete(doc.storageId);
+    }
+    await ctx.db.delete(args.documentId);
     return { ok: true };
   },
 });
@@ -148,6 +179,13 @@ export const getVault = query({
         .order("desc")
         .collect(),
     ]);
-    return { documents, assets };
+    // Resolve storage URLs so the client can download the actual files.
+    const documentsWithUrl = await Promise.all(
+      documents.map(async (d) => ({
+        ...d,
+        downloadUrl: d.storageId ? await ctx.storage.getUrl(d.storageId) : undefined,
+      })),
+    );
+    return { documents: documentsWithUrl, assets };
   },
 });

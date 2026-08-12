@@ -39,9 +39,11 @@ export const casePriorityValidator = v.union(
 );
 export type CasePriority = Infer<typeof casePriorityValidator>;
 
-// PRD §2.1 — Subscription + overage. ESSENTIAL = pay-per-service (no plan);
-// PRIORITY / PREMIUM = monthly subscriptions with Special Credit + discount.
+// PRD §2.1 — 4-tier commercial ladder:
+// PAY_AS_YOU_GO = pay-per-service (no plan); ESSENTIAL / PRIORITY / PREMIUM
+// are monthly subscriptions with a Special Credit + out-of-pocket discount.
 export const caseTierValidator = v.union(
+  v.literal("PAY_AS_YOU_GO"),
   v.literal("ESSENTIAL"),
   v.literal("PRIORITY"),
   v.literal("PREMIUM"),
@@ -57,6 +59,7 @@ export const regionZoneValidator = v.union(
 export type RegionZone = Infer<typeof regionZoneValidator>;
 
 export const subscriptionPlanValidator = v.union(
+  v.literal("ESSENTIAL"),
   v.literal("PRIORITY"),
   v.literal("PREMIUM"),
 );
@@ -407,6 +410,9 @@ const schema = defineSchema(
       category: vaultCategoryValidator,
       notes: v.optional(v.string()),
       mediaUrl: v.optional(v.string()),
+      storageId: v.optional(v.id("_storage")), // real file upload (Convex storage)
+      fileName: v.optional(v.string()),
+      fileSize: v.optional(v.number()),
       isVerified: v.boolean(),
       verifiedAt: v.optional(v.number()),
       createdAt: v.number(),

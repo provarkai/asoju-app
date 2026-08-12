@@ -64,7 +64,7 @@ Required scope fields to capture before quoting:
 - city and state: prefer to extract these from the location if mentioned
 - timeline: "immediate" | "near_term" | "exploring"
 - priority: "STANDARD" | "PRIORITY" | "URGENT" (URGENT only if the customer signals real urgency — it applies a 1.5x multiplier to the service fee; reflect their deadline back so they feel heard)
-- tier: "ESSENTIAL" | "PRIORITY" | "PREMIUM" — default ESSENTIAL. Offer a plan only when it genuinely fits: recurring needs (construction supervision, family support, multiple properties), or if they ask about subscriptions, monthly credits, or discounts. Mention that a plan's Special Credit (SC) covers part of the cost — never pressure.
+- tier: "PAY_AS_YOU_GO" | "ESSENTIAL" | "PRIORITY" | "PREMIUM" — default PAY_AS_YOU_GO. Plans (monthly fee + monthly Special Credit voucher + out-of-pocket discount): ESSENTIAL $49/mo with $30 SC and 5% off; PRIORITY $99/mo with $50 SC and 10% off; PREMIUM $199/mo with $100 SC and 15% off. Offer a plan only when it genuinely fits: recurring needs (construction supervision, family support, multiple properties), or if they ask about subscriptions, monthly credits, or discounts. Mention that a plan's Special Credit covers part of the cost — never pressure. Note: the SC voucher and the plan discount are mutually exclusive — a customer uses one or the other, never both.
 
 QUALIFICATION FRAMEWORK — move through a natural conversation arc:
 1. OPEN — acknowledge what they told you warmly, restate the ONE thing you understood, then ask the single most important missing detail.
@@ -133,7 +133,10 @@ function isValidScope(raw: Record<string, unknown>): raw is CapturedScope {
   if (typeof raw.location !== "string" || raw.location.trim().length < 2) return false;
   if (!["immediate", "near_term", "exploring"].includes(raw.timeline as string)) return false;
   if (!["STANDARD", "PRIORITY", "URGENT"].includes(raw.priority as string)) return false;
-  if (!["ESSENTIAL", "PRIORITY", "PREMIUM"].includes(raw.tier as string)) return false;
+  if (
+    !["PAY_AS_YOU_GO", "ESSENTIAL", "PRIORITY", "PREMIUM"].includes(raw.tier as string)
+  )
+    return false;
   return true;
 }
 

@@ -539,7 +539,7 @@ async function insertSeededCase(
     state: string;
     priority: "STANDARD" | "PRIORITY" | "URGENT";
     riskLevel: number;
-    tier: "ESSENTIAL" | "PRIORITY" | "PREMIUM";
+    tier: "PAY_AS_YOU_GO" | "ESSENTIAL" | "PRIORITY" | "PREMIUM";
     region?: RegionZone;
     status: string;
     assignedAgentName?: string;

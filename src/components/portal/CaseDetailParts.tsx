@@ -221,6 +221,8 @@ export function QuoteCard({
                   <span className="block text-[11px] leading-snug text-forest/55">
                     ≈ {naira(scNaira)} at the locked rate. Single-use this cycle —
                     any unused balance is forfeited.
+                    {quote.discountAmount > 0 &&
+                      " Replaces your plan discount (they don't stack)."}
                   </span>
                 </span>
               </label>

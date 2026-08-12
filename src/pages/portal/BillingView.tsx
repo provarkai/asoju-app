@@ -25,7 +25,7 @@ export function BillingView() {
   const sub = data?.subscription ?? null;
   const plans = data?.plans ?? PLAN_META;
 
-  const doSubscribe = async (plan: "PRIORITY" | "PREMIUM") => {
+  const doSubscribe = async (plan: "ESSENTIAL" | "PRIORITY" | "PREMIUM") => {
     setBusy(plan);
     try {
       await subscribe({ plan });
@@ -119,11 +119,11 @@ export function BillingView() {
       )}
 
       {/* Plans */}
-      <div className="mt-8 grid gap-5 md:grid-cols-3">
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {(Object.keys(plans) as (keyof typeof plans)[]).map((key) => {
           const p = plans[key];
           const isCurrent = sub?.plan === key;
-          const isSubPlan = key !== "ESSENTIAL";
+          const isSubPlan = key !== "PAY_AS_YOU_GO";
           return (
             <div
               key={key}

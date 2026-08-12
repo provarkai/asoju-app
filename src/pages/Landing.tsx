@@ -483,7 +483,7 @@ export default function Landing() {
             </p>
           </motion.div>
 
-          <div className="mx-auto mt-14 grid max-w-6xl gap-6 md:grid-cols-3">
+          <div className="mx-auto mt-14 grid max-w-6xl gap-6 md:grid-cols-2 xl:grid-cols-4">
             <motion.div
               initial="hidden"
               whileInView="show"
@@ -496,7 +496,7 @@ export default function Landing() {
                   <Map className="size-5" />
                 </span>
                 <div>
-                  <h3 className="font-display text-xl font-semibold text-forest">Essential</h3>
+                  <h3 className="font-display text-xl font-semibold text-forest">Pay As You Go</h3>
                   <p className="text-xs text-forest/50">Pay-per-service</p>
                 </div>
               </div>
@@ -513,7 +513,7 @@ export default function Landing() {
                 className="mt-8 w-full bg-forest text-ivory hover:bg-forest-deep"
                 onClick={() => go(isAuthenticated ? "/dashboard/new" : "/auth?returnTo=/dashboard/new")}
               >
-                Start with Essential
+                Start free
               </Button>
             </motion.div>
 
@@ -523,6 +523,40 @@ export default function Landing() {
               viewport={{ once: true }}
               variants={fadeUp}
               custom={1}
+              className="rounded-3xl border border-forest/10 bg-white p-8"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-gold/15 text-clay">
+                  <Sparkles className="size-5" />
+                </span>
+                <div>
+                  <h3 className="font-display text-xl font-semibold text-forest">Essential</h3>
+                  <p className="text-xs text-forest/50">Subscription + SC voucher</p>
+                </div>
+              </div>
+              <p className="mt-4 font-display text-3xl font-semibold text-forest">
+                $49<span className="text-sm font-normal text-forest/50"> /mo</span>
+              </p>
+              <ul className="mt-6 space-y-3 text-sm text-forest/70">
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Everything in Pay As You Go</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $30 Special Credit (SC) every month</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 5% off out-of-pocket overages</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Priority scheduling &amp; dedicated queue</li>
+              </ul>
+              <Button
+                className="mt-8 w-full bg-clay text-ivory hover:bg-clay-deep"
+                onClick={() => go(isAuthenticated ? "/dashboard/billing" : "/auth?returnTo=/dashboard/billing")}
+              >
+                Subscribe to Essential
+              </Button>
+            </motion.div>
+
+            <motion.div
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              custom={2}
               className="relative overflow-hidden rounded-3xl border border-gold/40 bg-white p-8 shadow-xl shadow-gold/10"
             >
               <Badge className="absolute right-6 top-6 border-gold/40 bg-gold/10 text-clay">Popular</Badge>
@@ -536,13 +570,13 @@ export default function Landing() {
                 </div>
               </div>
               <p className="mt-4 font-display text-3xl font-semibold text-forest">
-                $49<span className="text-sm font-normal text-forest/50"> /mo</span>
+                $99<span className="text-sm font-normal text-forest/50"> /mo</span>
               </p>
               <ul className="mt-6 space-y-3 text-sm text-forest/70">
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Everything in Essential</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $30 Special Credit (SC) every month</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 5% off out-of-pocket overages</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Priority scheduling &amp; dedicated queue</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $50 Special Credit (SC) every month</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 10% off out-of-pocket overages</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Gold-agent assignment + recurring visits</li>
               </ul>
               <Button
                 className="mt-8 w-full border-gold/40 bg-clay text-ivory hover:bg-clay-deep"
@@ -557,7 +591,7 @@ export default function Landing() {
               whileInView="show"
               viewport={{ once: true }}
               variants={fadeUp}
-              custom={2}
+              custom={3}
               className="relative overflow-hidden rounded-3xl bg-forest p-8 text-ivory shadow-2xl shadow-forest/30"
             >
               <div className="absolute inset-0 pattern-grid-dark" />
@@ -572,13 +606,13 @@ export default function Landing() {
                   </div>
                 </div>
                 <p className="mt-4 font-display text-3xl font-semibold">
-                  $99<span className="text-sm font-normal text-ivory/60"> /mo</span>
+                  $199<span className="text-sm font-normal text-ivory/60"> /mo</span>
                 </p>
                 <ul className="mt-6 space-y-3 text-sm text-ivory/75">
                   <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Everything in Priority</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> $50 Special Credit (SC) every month</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> 10% off out-of-pocket overages</li>
-                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Gold-agent assignment + recurring visits</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> $100 Special Credit (SC) every month</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> 15% off out-of-pocket overages</li>
+                  <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold-light" /> Dedicated relationship manager</li>
                 </ul>
                 <Button
                   variant="outline"
@@ -593,8 +627,9 @@ export default function Landing() {
           <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-forest/50">
             SC vouchers are single-use per billing cycle — any unused balance is forfeited. Apply your SC at
             checkout on Lagos &amp; South-West cases; remote “Other Location” cases carry full regional pricing
-            (Lagos ₦ / South-West / remote by case-manager scoping). Quotes lock today's parallel-market rate
-            for 48 hours.
+            (Lagos ₦ / South-West / remote by case-manager scoping). The SC voucher and your plan discount
+            are mutually exclusive — applying your SC replaces the discount. Quotes lock today's
+            parallel-market rate for 48 hours.
           </p>
         </div>
       </section>

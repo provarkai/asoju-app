@@ -59,21 +59,27 @@ const PRIORITIES: { key: CasePriority; label: string; hint: string }[] = [
 
 const PLANS: { key: CaseTier; label: string; desc: string; icon: typeof ClipboardCheck; badge?: string }[] = [
   {
-    key: "ESSENTIAL",
-    label: "Essential",
+    key: "PAY_AS_YOU_GO",
+    label: "Pay As You Go",
     desc: "Pay-per-service. AI intake, verified representative, evidence & report.",
     icon: ClipboardCheck,
   },
   {
-    key: "PRIORITY",
-    label: "Priority · $49/mo",
+    key: "ESSENTIAL",
+    label: "Essential · $49/mo",
     desc: "$30 Special Credit monthly + 5% off out-of-pocket cases.",
     icon: Sparkles,
   },
   {
-    key: "PREMIUM",
-    label: "Premium · $99/mo",
+    key: "PRIORITY",
+    label: "Priority · $99/mo",
     desc: "$50 Special Credit monthly + 10% off out-of-pocket cases.",
+    icon: Sparkles,
+  },
+  {
+    key: "PREMIUM",
+    label: "Premium · $199/mo",
+    desc: "$100 Special Credit monthly + 15% off out-of-pocket cases.",
     icon: Sparkles,
     badge: "Best value",
   },
@@ -97,7 +103,7 @@ export function NewRequestView() {
   const [state, setState] = useState("");
   const [timeline, setTimeline] = useState<Timeline>("near_term");
   const [priority, setPriority] = useState<CasePriority>("STANDARD");
-  const [tier, setTier] = useState<CaseTier>("ESSENTIAL");
+  const [tier, setTier] = useState<CaseTier>("PAY_AS_YOU_GO");
   const [region, setRegion] = useState<"LAGOS" | "SOUTH_WEST" | "OTHER">("LAGOS");
   const [submitting, setSubmitting] = useState(false);
 

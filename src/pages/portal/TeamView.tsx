@@ -7,12 +7,15 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   AlertTriangle,
   ArrowUpRight,
+  Bot,
   CircleDollarSign,
   Clock,
   FolderOpen,
   Lock,
   Search,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   UsersRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -70,6 +73,16 @@ export function TeamView() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [service, setService] = useState("ALL");
+  const feedback = useQuery(api.concierge.listConciergeFeedback);
+
+  const labStats = useMemo(() => {
+    if (!feedback) return null;
+    const total = feedback.length;
+    const up = feedback.filter((f) => f.rating === "up").length;
+    const down = total - up;
+    const passRate = total > 0 ? Math.round((up / total) * 100) : 0;
+    return { total, up, down, passRate };
+  }, [feedback]);
 
   if (user && user.role !== "admin") {
     return (
@@ -344,6 +357,77 @@ export function TeamView() {
             Back to my cases
           </Button>
         </div>
+      </section>
+
+      {/* Concierge Lab — ratings from the hero chat, so the team can see what
+          customers disliked and tighten the concierge prompt. */}
+      <section className="overflow-hidden rounded-2xl border border-forest/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-forest/8 bg-forest px-5 py-4 text-ivory">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-gold/20 text-gold-light">
+              <Bot className="size-4.5" />
+            </span>
+            <div>
+              <p className="font-display text-base font-semibold">Concierge Lab</p>
+              <p className="text-[11px] text-ivory/60">
+                Customer ratings on AI replies — the raw material for training.
+              </p>
+            </div>
+          </div>
+          {labStats && (
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-ivory/10 px-3 py-1.5 text-xs font-semibold">
+                {labStats.total} rated
+              </span>
+              <span className="rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                {labStats.passRate}% pass rate
+              </span>
+              <span className="rounded-lg bg-red-400/15 px-3 py-1.5 text-xs font-semibold text-red-300">
+                {labStats.down} 👎
+              </span>
+            </div>
+          )}
+        </div>
+        {!feedback || feedback.length === 0 ? (
+          <EmptyState
+            icon={Bot}
+            title="No ratings yet"
+            copy="As customers rate the concierge replies in the hero chat, the exact exchanges land here for review."
+          />
+        ) : (
+          <div className="max-h-[480px] divide-y divide-forest/6 overflow-y-auto">
+            {feedback.map((f) => (
+              <div key={f._id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1fr_1fr_auto]">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-forest/40">
+                    Customer said
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-forest/80">{f.userMessage}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-forest/40">
+                    Concierge replied{f.hadQuote ? " · quote card" : ""}
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-forest/80">{f.aiReply}</p>
+                  <p className="mt-1 text-[11px] text-forest/40">
+                    {new Date(f.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 lg:justify-end">
+                  {f.rating === "up" ? (
+                    <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700">
+                      <ThumbsUp className="size-3" /> Good
+                    </Badge>
+                  ) : (
+                    <Badge className="border-red-200 bg-red-50 text-red-700">
+                      <ThumbsDown className="size-3" /> Needs work
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

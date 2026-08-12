@@ -85,32 +85,40 @@ export function inferRegion(location?: string, city?: string): RegionZone {
   return "OTHER";
 }
 
-// PRD §2.1 — Subscription plans: monthly fee, monthly Special Credit (SC)
-// voucher, and out-of-pocket discount.
+// PRD §2.1 — 4-tier commercial ladder: monthly fee, monthly Special Credit
+// (SC) voucher, and out-of-pocket discount. SC and the plan discount are
+// mutually exclusive — applying the SC swaps out the discount (PRD §2 margin).
 export const PLAN_META: Record<
-  "ESSENTIAL" | "PRIORITY" | "PREMIUM",
+  "PAY_AS_YOU_GO" | "ESSENTIAL" | "PRIORITY" | "PREMIUM",
   { label: string; monthlyUsd: number; scUsd: number; discountPct: number; blurb: string }
 > = {
-  ESSENTIAL: {
-    label: "Essential",
+  PAY_AS_YOU_GO: {
+    label: "Pay As You Go",
     monthlyUsd: 0,
     scUsd: 0,
     discountPct: 0,
     blurb: "Pay-per-service. No subscription, no credits.",
   },
-  PRIORITY: {
-    label: "Priority",
+  ESSENTIAL: {
+    label: "Essential",
     monthlyUsd: 49,
     scUsd: 30,
     discountPct: 5,
-    blurb: "Monthly SC voucher + 5% off out-of-pocket cases.",
+    blurb: "Monthly $30 SC voucher + 5% off out-of-pocket cases.",
   },
-  PREMIUM: {
-    label: "Premium",
+  PRIORITY: {
+    label: "Priority",
     monthlyUsd: 99,
     scUsd: 50,
     discountPct: 10,
-    blurb: "Bigger SC voucher + 10% off out-of-pocket cases.",
+    blurb: "Monthly $50 SC voucher + 10% off out-of-pocket cases.",
+  },
+  PREMIUM: {
+    label: "Premium",
+    monthlyUsd: 199,
+    scUsd: 100,
+    discountPct: 15,
+    blurb: "$100 SC voucher monthly + 15% off out-of-pocket cases.",
   },
 };
 
@@ -510,9 +518,10 @@ export function buildQuoteLines(
     label: "VAT (7.5%) on ASOJU service fee",
     amount: tax,
   });
-  // PRD §2.1 — plan discount on out-of-pocket overages: Priority 5% / Premium 10%.
+  // PRD §2.1 — plan discount on out-of-pocket overages: 5% / 10% / 15% by
+  // tier. SC and discount are mutually exclusive (SC swaps it out at accept).
   const planKey =
-    tier === "PRIORITY" || tier === "PREMIUM" || tier === "ESSENTIAL" ? tier : "ESSENTIAL";
+    tier === "ESSENTIAL" || tier === "PRIORITY" || tier === "PREMIUM" ? tier : "PAY_AS_YOU_GO";
   const plan = PLAN_META[planKey];
   const discountPercent = plan.discountPct;
   const discountAmount = Math.round((baseAmount * discountPercent) / 100);
@@ -587,8 +596,12 @@ export const acceptQuote = mutation({
     if (quote.acceptedAt) throw new Error("Quote already accepted");
 
     // PRD §2.1 / §2.3 — Special Credit (SC) single-use voucher.
+    // SC and the plan discount are mutually exclusive: applying the SC means
+    // the quote is charged at the undiscounted amount and the SC covers part
+    // of it (the discount row is removed from the accepted quote).
     let scAmount = 0;
     let scForfeited = false;
+    const undiscounted = quote.amount + (quote.discountAmount ?? 0);
     if (args.useSC) {
       const sub = await ctx.db
         .query("subscriptions")
@@ -603,8 +616,8 @@ export const acceptQuote = mutation({
       }
       const fx = quote.lockedFxRate ?? fxRate();
       const scNaira = Math.round(sub.scUsd * fx);
-      scAmount = Math.min(scNaira, quote.amount);
-      scForfeited = scNaira > quote.amount; // case < SC → remainder forfeited this cycle
+      scAmount = Math.min(scNaira, undiscounted);
+      scForfeited = scNaira > undiscounted; // case < SC → remainder forfeited this cycle
       await ctx.db.patch(sub._id, {
         scUsedThisCycle: true,
         scUsedOnCaseId: args.caseId,
@@ -615,8 +628,12 @@ export const acceptQuote = mutation({
       acceptedAt: Date.now(),
       scApplied: args.useSC === true,
       scAmount: scAmount > 0 ? scAmount : undefined,
+      // SC replaces the plan discount — never both.
+      ...(args.useSC
+        ? { amount: undiscounted, discountAmount: 0, discountLabel: undefined }
+        : {}),
     });
-    const invoiceAmount = quote.amount - scAmount;
+    const invoiceAmount = (args.useSC ? undiscounted : quote.amount) - scAmount;
     const invoiceId = await ctx.db.insert("invoices", {
       caseId: args.caseId,
       userId,
