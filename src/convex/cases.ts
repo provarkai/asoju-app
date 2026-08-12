@@ -109,9 +109,9 @@ export const PLAN_META: Record<
   PRIORITY: {
     label: "Priority",
     monthlyUsd: 99,
-    scUsd: 50,
-    discountPct: 10,
-    blurb: "Monthly $50 SC voucher + 10% off out-of-pocket cases.",
+    scUsd: 60,
+    discountPct: 12,
+    blurb: "Monthly $60 SC voucher + 12% off out-of-pocket cases.",
   },
   PREMIUM: {
     label: "Premium",
@@ -518,7 +518,7 @@ export function buildQuoteLines(
     label: "VAT (7.5%) on ASOJU service fee",
     amount: tax,
   });
-  // PRD §2.1 — plan discount on out-of-pocket overages: 5% / 10% / 15% by
+  // PRD §2.1 — plan discount on out-of-pocket overages: 5% / 12% / 15% by
   // tier. SC and discount are mutually exclusive (SC swaps it out at accept).
   const planKey =
     tier === "ESSENTIAL" || tier === "PRIORITY" || tier === "PREMIUM" ? tier : "PAY_AS_YOU_GO";

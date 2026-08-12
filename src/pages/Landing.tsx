@@ -559,7 +559,7 @@ export default function Landing() {
               custom={2}
               className="relative overflow-hidden rounded-3xl border border-gold/40 bg-white p-8 shadow-xl shadow-gold/10"
             >
-              <Badge className="absolute right-6 top-6 border-gold/40 bg-gold/10 text-clay">Popular</Badge>
+              <Badge className="absolute right-6 top-6 border-gold/40 bg-gold/10 text-clay">Best value</Badge>
               <div className="flex items-center gap-2.5">
                 <span className="flex size-10 items-center justify-center rounded-xl bg-gold/15 text-clay">
                   <Sparkles className="size-5" />
@@ -574,8 +574,8 @@ export default function Landing() {
               </p>
               <ul className="mt-6 space-y-3 text-sm text-forest/70">
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Everything in Essential</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $50 Special Credit (SC) every month</li>
-                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 10% off out-of-pocket overages</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> $60 Special Credit (SC) every month</li>
+                <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> 12% off out-of-pocket overages</li>
                 <li className="flex gap-2.5"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" /> Gold-agent assignment + recurring visits</li>
               </ul>
               <Button

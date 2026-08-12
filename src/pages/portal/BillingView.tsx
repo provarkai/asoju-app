@@ -60,7 +60,7 @@ export function BillingView() {
             Subscription &amp; billing
           </p>
           <h1 className="mt-1 font-display text-3xl font-semibold text-forest">
-            Priority &amp; Premium — with a monthly Special Credit
+            Pick your plan — every subscription includes a monthly Special Credit
           </h1>
           <p className="mt-1.5 text-sm text-forest/60">
             Subscription + overage: your SC voucher covers part of a case each
@@ -129,12 +129,12 @@ export function BillingView() {
               key={key}
               className={cn(
                 "flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition-all",
-                key === "PREMIUM" ? "border-gold/50 shadow-lg shadow-gold/10" : "border-forest/10",
+                key === "PRIORITY" ? "border-gold/50 shadow-lg shadow-gold/10" : "border-forest/10",
               )}
             >
               <div className="flex items-center justify-between">
                 <h3 className="font-display text-lg font-semibold text-forest">{p.label}</h3>
-                {key === "PREMIUM" && (
+                {key === "PRIORITY" && (
                   <Badge className="border-gold/40 bg-gold/10 text-clay">Best value</Badge>
                 )}
               </div>
@@ -178,7 +178,7 @@ export function BillingView() {
                 <Button
                   className={cn(
                     "mt-6 w-full",
-                    key === "PREMIUM"
+                    key === "PRIORITY"
                       ? "bg-gold font-semibold text-forest-deep hover:bg-gold-light"
                       : "bg-forest text-ivory hover:bg-forest-deep",
                   )}

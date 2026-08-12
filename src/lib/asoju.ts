@@ -210,9 +210,9 @@ export const PLAN_META: Record<
   PRIORITY: {
     label: "Priority",
     monthlyUsd: 99,
-    scUsd: 50,
-    discountPct: 10,
-    blurb: "Monthly $50 SC voucher + 10% off out-of-pocket cases.",
+    scUsd: 60,
+    discountPct: 12,
+    blurb: "Monthly $60 SC voucher + 12% off out-of-pocket cases.",
   },
   PREMIUM: {
     label: "Premium",

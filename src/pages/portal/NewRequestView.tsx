@@ -73,15 +73,15 @@ const PLANS: { key: CaseTier; label: string; desc: string; icon: typeof Clipboar
   {
     key: "PRIORITY",
     label: "Priority · $99/mo",
-    desc: "$50 Special Credit monthly + 10% off out-of-pocket cases.",
+    desc: "$60 Special Credit monthly + 12% off out-of-pocket cases.",
     icon: Sparkles,
+    badge: "Best value",
   },
   {
     key: "PREMIUM",
     label: "Premium · $199/mo",
     desc: "$100 Special Credit monthly + 15% off out-of-pocket cases.",
     icon: Sparkles,
-    badge: "Best value",
   },
 ];
 
