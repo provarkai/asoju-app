@@ -9,7 +9,6 @@ import {
   FileText,
   HardHat,
   Home,
-  MapPin,
   MessageCircle,
   PackageSearch,
   PhoneCall,
@@ -19,6 +18,7 @@ import {
   UserCheck,
   Map,
 } from "lucide-react";
+import AiConciergeDemo from "@/components/landing/AiConciergeDemo";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
@@ -225,91 +225,18 @@ export default function Landing() {
             </div>
           </motion.div>
 
-          {/* Hero visual — live-looking case card */}
+          {/* Hero visual — chat-style AI Concierge */}
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="relative mx-auto w-full max-w-lg"
           >
-            <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-gold/25 via-transparent to-forest/10 blur-2xl" />
-            <div className="relative overflow-hidden rounded-3xl border border-forest/10 bg-white shadow-2xl shadow-forest/15">
-              <div className="flex items-center justify-between border-b border-forest/8 px-6 py-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-forest/50">
-                    Case ASJ-000184 · Property Inspection
-                  </p>
-                  <p className="font-display text-lg font-semibold text-forest">
-                    Ibeju-Lekki plot — verification
-                  </p>
-                </div>
-                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
-                  ● In progress
-                </Badge>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5 px-6 pt-5">
-                {[
-                  "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=400&q=70",
-                  "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=400&q=70",
-                  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=70",
-                ].map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt="Field evidence"
-                    className="aspect-square w-full rounded-xl object-cover ring-1 ring-forest/10"
-                  />
-                ))}
-              </div>
-              <div className="space-y-3 px-6 py-5">
-                <div className="rounded-xl border border-forest/8 bg-ivory/70 p-3.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-forest/70">
-                      Representative: Kelechi O.
-                    </span>
-                    <span className="text-forest/40">2h ago</span>
-                  </div>
-                  <p className="mt-1 text-[13px] leading-snug text-forest/80">
-                    "Plot is fenced with a 6ft wall, gate locked. No visible
-                    encroachment. Neighbouring plot under construction."
-                  </p>
-                </div>
-                <div className="flex items-center justify-between text-xs font-medium text-forest/60">
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="size-3.5 text-clay" />
-                    Ibeju-Lekki, Lagos
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 text-forest" />
-                    Evidence QC-approved
-                  </span>
-                </div>
-              </div>
-            </div>
-            {/* floating chip */}
-            <div className="absolute -left-4 top-8 hidden rounded-2xl border border-forest/10 bg-white px-4 py-3 shadow-xl sm:block">
-              <p className="text-[11px] font-semibold text-forest/50">Quote</p>
-              <p className="font-display text-lg font-bold text-forest">
-                {naira(91375)}
-              </p>
-              <p className="text-[11px] text-forest/40">valid 7 days</p>
-            </div>
-            <div className="absolute -right-3 bottom-10 hidden rounded-2xl border border-forest/10 bg-white px-4 py-3 shadow-xl sm:block">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold text-forest/50">
-                <Sparkles className="size-3.5 text-gold" /> AI Concierge
-              </p>
-              <p className="mt-0.5 text-xs text-forest/70">Request → Case in minutes</p>
-            </div>
-            {/* Quote + AI Concierge — always visible; static pills below the card on small screens */}
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:hidden">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-forest/15 bg-white px-3.5 py-1.5 text-xs font-semibold text-forest/80 shadow-sm">
-                Quote {naira(91375)} · valid 7 days
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-white px-3.5 py-1.5 text-xs font-semibold text-forest/70 shadow-sm">
-                <Sparkles className="size-3.5 text-gold" />
-                AI Concierge — Request → Case in minutes
-              </span>
-            </div>
+            <AiConciergeDemo
+              onStart={() =>
+                go(isAuthenticated ? "/dashboard/new" : "/auth?returnTo=/dashboard/new")
+              }
+            />
           </motion.div>
         </div>
       </section>
