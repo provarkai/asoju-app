@@ -109,43 +109,70 @@ function isValidScope(raw: Record<string, unknown>): raw is CapturedScope {
   return true;
 }
 
-/** LLM call. Primary: BazaarLink (OpenAI-compatible gateway, requires
- *  BAZAARLINK_API_KEY in the deployment env). Fallback: the platform's VLY
- *  gateway. Never exposes keys to the client. */
+/** One chat-completion call against the BazaarLink OpenAI-compatible API. */
+async function bazaarCompletion(
+  model: string,
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  maxTokens: number,
+): Promise<string> {
+  const base = (process.env.BAZAARLINK_BASE_URL ?? "https://bazaarlink.ai/api/v1").replace(
+    /\/+$/,
+    "",
+  );
+  const res = await axios.post(
+    `${base}/chat/completions`,
+    {
+      model,
+      messages,
+      temperature: 0.4,
+      max_tokens: maxTokens,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.BAZAARLINK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    },
+  );
+  const content = res.data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || !content.trim()) {
+    throw new Error(`Empty response from ${model}`);
+  }
+  return content;
+}
+
+/**
+ * LLM call. Primary: BazaarLink (OpenAI-compatible gateway). Tries the paid
+ * default first, then the free models (rate-limited and best-effort, but they
+ * work without a balance). Falls back to the platform VLY gateway if no
+ * BAZAARLINK_API_KEY is configured. Never exposes keys to the client.
+ */
 async function callLlm(
   messages: { role: "system" | "user" | "assistant"; content: string }[],
 ): Promise<string> {
   const bazaarKey = process.env.BAZAARLINK_API_KEY;
-  const base = (process.env.BAZAARLINK_BASE_URL ?? "https://bazaarlink.ai/api/v1").replace(/\/+$/, "");
 
   if (bazaarKey) {
-    try {
-      const res = await axios.post(
-        `${base}/chat/completions`,
-        {
-          model: process.env.BAZAARLINK_MODEL ?? "openai/gpt-4o-mini",
-          messages,
-          temperature: 0.4,
-          max_tokens: 700,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${bazaarKey}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 30000,
-        },
-      );
-      const content = res.data?.choices?.[0]?.message?.content;
-      if (typeof content !== "string" || !content.trim()) {
-        throw new Error("Empty response from LLM gateway");
+    const override = process.env.BAZAARLINK_MODEL;
+    const candidates: { model: string; maxTokens: number }[] = override
+      ? [{ model: override, maxTokens: 1500 }]
+      : [
+          { model: "openai/gpt-4o-mini", maxTokens: 700 },
+          { model: "deepseek/deepseek-v4-flash:free", maxTokens: 2000 },
+          { model: "qwen/qwen3.7-flash:free", maxTokens: 1500 },
+        ];
+    const errors: string[] = [];
+    for (const c of candidates) {
+      try {
+        return await bazaarCompletion(c.model, messages, c.maxTokens);
+      } catch (e: any) {
+        const detail = e?.response?.data?.error?.message ?? e?.message ?? String(e);
+        errors.push(`${c.model}: ${detail}`);
+        console.error("[Concierge] candidate failed", { model: c.model, detail });
       }
-      return content;
-    } catch (e: any) {
-      const detail = e?.response?.data?.error?.message ?? e?.message;
-      console.error("[Concierge] BazaarLink failure", { detail });
-      throw new Error(detail ?? "LLM request failed");
     }
+    throw new Error(errors.join(" | "));
   }
 
   // Fallback: platform gateway (VLY_INTEGRATION_KEY).
