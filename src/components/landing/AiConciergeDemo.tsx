@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -9,6 +9,8 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -47,13 +49,14 @@ export type QuoteData = {
 };
 
 type UiMsg =
-  | { id: number; kind: "text"; role: "user" | "assistant"; text: string }
+  | { id: number; kind: "text"; role: "user" | "assistant"; text: string; rated?: "up" | "down" }
   | {
       id: number;
       kind: "quote";
       role: "assistant";
       quote: QuoteData;
       captured: CapturedScope;
+      rated?: "up" | "down";
     };
 
 const GREETING =
@@ -77,6 +80,7 @@ export default function AiConciergeDemo({
 }) {
   const conciergeChat = useAction(api.ai.conciergeChat);
   const createCase = useAction(api.ai.conciergeCreateCase);
+  const recordFeedback = useMutation(api.concierge.recordConciergeFeedback);
 
   const [messages, setMessages] = useState<UiMsg[]>([
     { id: 0, kind: "text", role: "assistant", text: GREETING },
@@ -137,6 +141,37 @@ export default function AiConciergeDemo({
       ]);
     } finally {
       setThinking(false);
+    }
+  };
+
+  /** Training loop: rate the last assistant reply (walk back to the user
+   *  message that prompted it). Stored for the team to review and iterate. */
+  const rateReply = async (msgId: number, rating: "up" | "down", hadQuote = false) => {
+    const idx = messages.findIndex((m) => m.id === msgId);
+    if (idx < 0) return;
+    const ai = messages[idx];
+    if (ai.role !== "assistant") return;
+    let userMsg = "";
+    for (let i = idx - 1; i >= 0; i--) {
+      const prev = messages[i];
+      if (prev.kind === "text" && prev.role === "user") {
+        userMsg = prev.text;
+        break;
+      }
+    }
+    if (!userMsg) return;
+    let aiReply = "[quote card]";
+    if (ai.kind === "text") aiReply = ai.text;
+    try {
+      await recordFeedback({
+        rating,
+        userMessage: userMsg,
+        aiReply,
+        hadQuote,
+      });
+      setMessages((m) => m.map((x) => (x.id === msgId ? { ...x, rated: rating } : x)));
+    } catch {
+      /* ratings are best-effort */
     }
   };
 
@@ -212,11 +247,25 @@ export default function AiConciergeDemo({
                 captured={msg.captured}
                 creating={creating}
                 isAuthenticated={isAuthenticated}
+                rated={msg.rated}
                 onAccept={() => acceptQuote(msg.captured)}
+                onRate={(r) => rateReply(msg.id, r, true)}
               />
             ) : (
               <Bubble key={msg.id} user={msg.role === "user"} text={msg.text} />
             ),
+          )}
+          {messages.map((msg) =>
+            msg.kind === "text" &&
+            msg.role === "assistant" &&
+            msg.text !== GREETING &&
+            !thinking ? (
+              <RatingRow
+                key={`r-${msg.id}`}
+                rated={msg.rated}
+                onRate={(r) => rateReply(msg.id, r)}
+              />
+            ) : null,
           )}
           {thinking && <TypingDots />}
           <div ref={endRef} />
@@ -308,6 +357,45 @@ function Bubble({ user, text }: { user: boolean; text: string }) {
   );
 }
 
+function RatingRow({
+  rated,
+  onRate,
+}: {
+  rated?: "up" | "down";
+  onRate: (r: "up" | "down") => void;
+}) {
+  if (rated) {
+    return (
+      <div className="flex justify-start pl-4">
+        <p className="text-[10px] text-forest/40">Thanks — this helps us improve.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 pl-4">
+      <span className="text-[10px] text-forest/45">Was this helpful?</span>
+      <button
+        type="button"
+        aria-label="Good reply"
+        title="Good reply"
+        onClick={() => onRate("up")}
+        className="rounded-full border border-forest/15 bg-white p-1 text-forest/55 transition-colors hover:border-forest/40 hover:text-forest"
+      >
+        <ThumbsUp className="size-3" />
+      </button>
+      <button
+        type="button"
+        aria-label="Poor reply"
+        title="Poor reply"
+        onClick={() => onRate("down")}
+        className="rounded-full border border-forest/15 bg-white p-1 text-forest/55 transition-colors hover:border-clay/50 hover:text-clay"
+      >
+        <ThumbsDown className="size-3" />
+      </button>
+    </div>
+  );
+}
+
 function TypingDots() {
   return (
     <div className="flex justify-start">
@@ -330,13 +418,17 @@ function QuoteCard({
   captured,
   creating,
   isAuthenticated,
+  rated,
   onAccept,
+  onRate,
 }: {
   quote: QuoteData;
   captured: CapturedScope;
   creating: boolean;
   isAuthenticated: boolean;
+  rated?: "up" | "down";
   onAccept: () => void;
+  onRate: (r: "up" | "down") => void;
 }) {
   return (
     <motion.div
@@ -421,14 +513,41 @@ function QuoteCard({
           </p>
         </div>
 
-        <p className="border-t border-forest/8 bg-ivory/40 px-4 py-2 text-[11px] text-forest/50">
-          📍 {captured.location} · {quote.serviceLabel}
-          {quote.regionZone === "OTHER"
-            ? " · Special Credit not available in this region"
-            : quote.regionZone
-              ? ` · ${quote.regionZone === "LAGOS" ? "Lagos zone" : "South-West zone"} — SC eligible`
-              : ""}
-        </p>
+        <div className="flex items-center justify-between border-t border-forest/8 bg-ivory/40 px-4 py-2">
+          <p className="text-[11px] text-forest/50">
+            📍 {captured.location} · {quote.serviceLabel}
+            {quote.regionZone === "OTHER"
+              ? " · SC not available in this region"
+              : quote.regionZone
+                ? ` · ${quote.regionZone === "LAGOS" ? "Lagos zone" : "South-West zone"} — SC eligible`
+                : ""}
+          </p>
+          {rated ? (
+            <span className="text-[10px] text-forest/40">Thanks for the feedback</span>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-forest/45">Helpful?</span>
+              <button
+                type="button"
+                aria-label="Good quote"
+                title="Good quote"
+                onClick={() => onRate("up")}
+                className="rounded-full border border-forest/15 bg-white p-1 text-forest/55 transition-colors hover:border-forest/40 hover:text-forest"
+              >
+                <ThumbsUp className="size-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Poor quote"
+                title="Poor quote"
+                onClick={() => onRate("down")}
+                className="rounded-full border border-forest/15 bg-white p-1 text-forest/55 transition-colors hover:border-clay/50 hover:text-clay"
+              >
+                <ThumbsDown className="size-3" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -428,6 +428,17 @@ const schema = defineSchema(
       name: v.string(),
       value: v.number(),
     }).index("by_name", ["name"]),
+
+    // Concierge training loop — customer ratings on AI replies so the team
+    // can review real conversations and iterate on the concierge prompt.
+    conciergeFeedback: defineTable({
+      userId: v.string(),
+      rating: v.union(v.literal("up"), v.literal("down")),
+      userMessage: v.string(),
+      aiReply: v.string(),
+      hadQuote: v.boolean(),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,
