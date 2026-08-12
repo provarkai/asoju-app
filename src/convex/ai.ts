@@ -147,6 +147,11 @@ export const conciergeChat = action({
     });
 
     if (!res.success || !res.data?.choices?.[0]?.message?.content) {
+      console.error("[Concierge] gateway failure", {
+        error: res.error,
+        keyPresent: Boolean(process.env.VLY_INTEGRATION_KEY),
+        baseUrl: process.env.VLY_INTEGRATION_BASE_URL ?? "unset",
+      });
       throw new Error(res.error ?? "AI Concierge unavailable");
     }
 
